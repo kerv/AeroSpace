@@ -4,6 +4,9 @@ import Common
 final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
+    /// Most-recently fetched AX window title, updated asynchronously before each layout pass.
+    /// Initialized to app name so the indicator shows something useful before the first async fetch.
+    @MainActor var cachedTitle: String = ""
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -19,24 +22,58 @@ final class MacWindow: Window {
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId, .cancellable)
-        let data = try await unbindAndGetBindingDataForNewWindow(
+        let placementTitle = (try? await macApp.getAxTitle(windowId, .cancellable)) ?? ""
+        let resolution = try await unbindAndGetBindingDataForNewWindow(
             windowId,
             macApp,
             isStartup
                 ? (rect?.center.monitorApproximation ?? mainMonitor).activeWorkspace
                 : focus.workspace,
             window: nil,
+            startupRect: isStartup ? rect : nil,
             .cancellable,
         )
+        let data = resolution.bindingData
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        data.preferredMostRecentChildAfterBind?.markAsMostRecentChild()
+        aeroLog("window detected: \(windowId) \(macApp.rawAppBundleId ?? "?") → \(data.parent)")
         allWindowsMap[windowId] = window
+        window.placementIdentityTitle = placementTitle
+        if let decision = resolution.placementDecision {
+            recordPlacement(decision, for: window)
+        }
+
+        // Apply non-callback placement defaults (floating defaults, sticky, scratchpad) before
+        // generic on-window-detected callbacks so declarative defaults establish the baseline.
+        applyRuntimePlacementDefaults(window)
+
+        if isStartup, window.isFloating, FloatingMemory.shared.isRemembered(windowId: window.windowId),
+           let workspace = window.nodeWorkspace,
+           let frame = rememberedFloatingFrame(for: window, in: workspace, zone: workspace.workspaceMonitor.visibleRect) {
+            window.setAxFrame(frame.origin, frame.size)
+        }
 
         try await debugWindowsIfRecording(window, .cancellable)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
             await tryOnWindowDetected(window)
+        }
+        // Restore only tiling windows; floating and scratchpad rules retain their own behavior.
+        if !window.isFloating, let workspace = window.nodeWorkspace,
+           let entry = matchingPlacementEntry(for: window, profile: MonitorProfile(monitors).key)
+        {
+            // Keep the matched identity stable when a unique app fallback matched a changed title.
+            window.placementIdentityTitle = entry.title
+            let savedWorkspace = Workspace.get(byName: entry.lastWorkspace)
+            savedWorkspace.ensureZoneContainers(for: savedWorkspace.workspaceMonitor)
+            if let binding = rememberedBinding(for: window, in: savedWorkspace) {
+                window.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
+            }
+        }
+        if let decision = resolution.placementDecision {
+            broadcastWindowRouted(decision, for: window)
         }
         return window
     }
@@ -80,6 +117,11 @@ final class MacWindow: Window {
         if MacWindow.allWindowsMap.removeValue(forKey: windowId) == nil {
             return
         }
+        aeroLog("window closed: \(windowId) \(macApp.rawAppBundleId ?? "?")")
+        BorderController.shared.removeBorder(windowId: windowId)
+        FloatingMemory.shared.forget(windowId: windowId)
+        StickyMemory.shared.forget(windowId: windowId)
+        ScratchpadMemory.shared.forget(windowId: windowId)
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
@@ -186,6 +228,23 @@ final class MacWindow: Window {
         prevUnhiddenProportionalPositionInsideWorkspaceRect != nil
     }
 
+    /// Returns the on-screen position this floating window should be restored to on quit.
+    /// For windows hidden in a corner (off-screen workspace), computes the proportional position
+    /// they would be at if their workspace were active. For on-screen windows, returns nil
+    /// (caller should read the current axRect instead).
+    @MainActor func floatingQuitPoint() -> CGPoint? {
+        guard let prevUnhiddenProportionalPositionInsideWorkspaceRect else { return nil }
+        guard let nodeWorkspace else { return nil }
+        let workspaceRect = nodeWorkspace.workspaceMonitor.rect
+        var newX = workspaceRect.topLeftX + workspaceRect.width * prevUnhiddenProportionalPositionInsideWorkspaceRect.x
+        var newY = workspaceRect.topLeftY + workspaceRect.height * prevUnhiddenProportionalPositionInsideWorkspaceRect.y
+        let windowWidth = lastFloatingSize?.width ?? 0
+        let windowHeight = lastFloatingSize?.height ?? 0
+        newX = newX.coerce(in: workspaceRect.minX ... max(workspaceRect.minX, workspaceRect.maxX - windowWidth))
+        newY = newY.coerce(in: workspaceRect.minY ... max(workspaceRect.minY, workspaceRect.maxY - windowHeight))
+        return CGPoint(x: newX, y: newY)
+    }
+
     override func getAxSize(_ cm: CancellationMode) async throws -> CGSize? {
         try await macApp.getAxSize(windowId, cm)
     }
@@ -202,42 +261,63 @@ final class MacWindow: Window {
 extension Window {
     @MainActor
     func relayoutWindow(on workspace: Workspace, _ cm: CancellationMode, forceTile: Bool = false) async throws {
-        let data = forceTile
+        let resolution = forceTile
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
             : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self, cm)
+        let data = resolution.bindingData
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        data.preferredMostRecentChildAfterBind?.markAsMostRecentChild()
+        if let decision = resolution.placementDecision {
+            recordPlacement(decision, for: self)
+        }
     }
+}
+
+private struct WindowBindingResolution {
+    let bindingData: BindingData
+    let placementDecision: WindowTilingPlacementDecision?
 }
 
 // The function is private because it's unsafe. It leaves the window in unbound state
 @MainActor
-private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _ workspace: Workspace, window: Window?, _ cm: CancellationMode) async throws -> BindingData {
+private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _ workspace: Workspace, window: Window?, startupRect: Rect? = nil, _ cm: CancellationMode) async throws -> WindowBindingResolution {
     let windowLevel = getWindowLevel(for: windowId)
-    return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel, cm) {
-        case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .dialog: BindingData(parent: workspace.floatingWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
+    switch try await macApp.getAxUiElementWindowType(windowId, windowLevel, cm) {
+        case .popup:
+            return WindowBindingResolution(
+                bindingData: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST),
+                placementDecision: nil
+            )
+        case .dialog:
+            return WindowBindingResolution(
+                bindingData: BindingData(parent: workspace.floatingWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST),
+                placementDecision: nil
+            )
+        case .window:
+            return unbindAndGetBindingDataForNewTilingWindow(
+                workspace,
+                window: window,
+                startupRect: startupRect,
+                appBundleId: window == nil ? macApp.rawAppBundleId : nil
+            )
     }
 }
 
 // The function is private because it's unsafe. It leaves the window in unbound state
 @MainActor
-private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
+private func unbindAndGetBindingDataForNewTilingWindow(
+    _ workspace: Workspace,
+    window: Window?,
+    startupRect: Rect? = nil,
+    appBundleId: String? = nil
+) -> WindowBindingResolution {
     window?.unbindFromParent() // It's important to unbind to get correct data from below
-    let mruWindow = workspace.mostRecentWindowRecursive
-    if let mruWindow, let tilingParent = mruWindow.parent as? TilingContainer {
-        return BindingData(
-            parent: tilingParent,
-            adaptiveWeight: WEIGHT_AUTO,
-            index: mruWindow.ownIndex.orDie() + 1,
-        )
-    } else {
-        return BindingData(
-            parent: workspace.rootTilingContainer,
-            adaptiveWeight: WEIGHT_AUTO,
-            index: INDEX_BIND_LAST,
-        )
-    }
+    let decision = resolveNewTilingWindowPlacement(
+        in: workspace,
+        appBundleId: appBundleId,
+        startupRect: startupRect
+    )
+    return WindowBindingResolution(bindingData: decision.bindingData, placementDecision: decision)
 }
 
 @MainActor

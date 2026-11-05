@@ -15,6 +15,10 @@ let projectRoot: URL = {
 
 @MainActor
 func setUpWorkspacesForTests() {
+    FloatingGeometryMemory.shared = FloatingGeometryMemory(url: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-float-test-\(UUID().uuidString).json"))
+    DockedMonitorWorkspaceMemory.shared = DockedMonitorWorkspaceMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-dock-workspace-test-\(UUID().uuidString).json"))
+    DockedZoneLayoutMemory.shared = DockedZoneLayoutMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-dock-test-\(UUID().uuidString).json"))
+    WindowPlacementMemory.shared = WindowPlacementMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-placement-test-\(UUID().uuidString).json"))
     config = defaultConfig
     configUrl = defaultConfigUrl
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable
@@ -26,6 +30,16 @@ func setUpWorkspacesForTests() {
     config.persistentWorkspaces = []
 
     for workspace in Workspace.all {
+        workspace.zoneContainers = [:]
+        workspace.activeZoneProfile = nil
+        workspace.zoneLayoutProfileKey = nil
+        workspace.savedRootOrientation = nil
+        workspace.focusedZone = nil
+        workspace.mruZones = []
+        workspace.savedZoneWeights = nil
+        workspace.focusModeZone = nil
+        workspace.presentationModeSnapshot = nil
+        workspace.activeZoneDefinitions = []
         for child in workspace.children {
             child.unbindFromParent()
         }
@@ -38,6 +52,10 @@ func setUpWorkspacesForTests() {
 
     TestApp.shared.focusedWindow = nil
     TestApp.shared.windows = []
+    broadcastEventForTesting = nil
+    activeZonePresetName = nil
+    zonesDisabledByProfile = false
+    primeZoneEventBroadcastTracking()
 }
 
 extension ParsedCmd {
@@ -81,6 +99,27 @@ extension MoveNodeToWorkspaceCmdArgs {
         self = MoveNodeToWorkspaceCmdArgs(rawArgs: [])
         self.target = .initialized(.direct(.parse(workspace).getOrDie()))
     }
+}
+
+struct FakeMonitor: Monitor {
+    let monitorAppKitNsScreenScreensId: Int = 1
+    let name: String = "Fake"
+    let rect: Rect
+    let visibleRect: Rect
+    let width: CGFloat
+    let height: CGFloat
+    let isMain: Bool = false
+
+    init(width: CGFloat, height: CGFloat) {
+        let r = Rect(topLeftX: 0, topLeftY: 0, width: width, height: height)
+        self.rect = r
+        self.visibleRect = r
+        self.width = width
+        self.height = height
+    }
+
+    static var ultrawide: FakeMonitor { FakeMonitor(width: 3440, height: 1440) }
+    static var standard: FakeMonitor { FakeMonitor(width: 1920, height: 1080) }
 }
 
 extension HotkeyBinding {

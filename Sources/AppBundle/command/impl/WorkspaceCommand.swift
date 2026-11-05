@@ -27,6 +27,9 @@ struct WorkspaceCommand: Command {
                     return WorkspaceBackAndForthCommand(args: WorkspaceBackAndForthCmdArgs(rawArgs: [])).run(env, io)
                 }
         }
+        if workspaceName == Workspace.scratchpadName {
+            return .fail(io.err("'\(Workspace.scratchpadName)' is reserved for the scratchpad. Use the 'scratchpad' command instead"))
+        }
         if focusedWs.name == workspaceName {
             return switch args.failIfNoop {
                 case true: .fail

@@ -53,6 +53,18 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
 
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main,
+        ) { notification in
+            let notifName = notification.name.rawValue
+            Task { @MainActor in
+                if !TrayMenuModel.shared.isEnabled { return }
+                scheduleCancellableCompleteRefreshSession(.globalObserver(notifName))
+            }
+        }
+
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
             // todo reduce number of refreshSession in the callback
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession
@@ -60,6 +72,9 @@ enum GlobalObserver {
             Task.startUnstructured { @MainActor in
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 try await resetManipulatedWithMouseIfPossible()
+                if let window = focus.windowOrNil, window.isFloating {
+                    await rememberFloatingGeometry(window)
+                }
                 let mouseLocation = mouseLocation
                 let clickedMonitor = mouseLocation.monitorApproximation
                 switch true {

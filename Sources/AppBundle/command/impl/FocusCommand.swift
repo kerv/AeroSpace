@@ -26,7 +26,7 @@ struct FocusCommand: Command {
             case .direction(let direction):
                 let window = target.windowOrNil
                 if let (parent, ownIndex) = window?.closestParent(hasChildrenInDirection: direction, withLayout: nil) {
-                    guard let windowToFocus = parent.children[ownIndex + direction.focusOffset]
+                    guard let windowToFocus = parent.children[ownIndex + direction.containerFocusOffset(parent)]
                         .findLeafWindowRecursive(snappedTo: direction.opposite) else { return .fail(io.err(bugPrompt())) }
                     return .from(bool: windowToFocus.focusWindow())
                 } else {
@@ -45,7 +45,14 @@ struct FocusCommand: Command {
                     return .fail(io.err("Can't find window with DFS index \(dfsIndex)"))
                 }
             case .dfsRelative(let nextPrev):
-                let windows = target.workspace.rootTilingContainer.allLeafWindowsRecursive
+                let windows: [Window] = if args.scope == .currentContainer,
+                                           let focused = target.windowOrNil,
+                                           let parent = focused.parent as? TilingContainer
+                {
+                    parent.allLeafWindowsRecursive
+                } else {
+                    target.workspace.rootTilingContainer.allLeafWindowsRecursive
+                }
                 guard let currentIndex = windows.firstIndex(where: { $0 == target.windowOrNil }) else {
                     return .fail
                 }
@@ -145,7 +152,7 @@ struct FocusCommand: Command {
                     center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
                         ? target.ownIndex.orDie() + 1
                         : target.ownIndex.orDie()
-                case .accordion:
+                case .accordion, .stack:
                     center.getProjection(tilingParent.orientation) >= targetCenter.getProjection(tilingParent.orientation)
                         ? tilingParent.children.count
                         : 0
@@ -201,6 +208,11 @@ extension TreeNode {
             case .window(let window):
                 return window
             case .tilingContainer(let container):
+                // Stack containers always enter via the most-recently-focused child, regardless
+                // of which direction we're arriving from.
+                if container.layout == .stack {
+                    return container.mostRecentChild?.findLeafWindowRecursive(snappedTo: direction)
+                }
                 if direction.orientation == container.orientation {
                     return (direction.isPositive ? container.children.last : container.children.first)?
                         .findLeafWindowRecursive(snappedTo: direction)

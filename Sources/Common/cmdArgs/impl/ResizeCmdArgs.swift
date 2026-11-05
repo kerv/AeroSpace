@@ -6,6 +6,7 @@ public struct ResizeCmdArgs: CmdArgs {
         help: resize_help_generated,
         flags: [
             "--window-id": windowIdSubArgParser(),
+            "--zone": trueBoolFlag(\.zone),
         ],
         posArgs: [
             newMandatoryPosArgParser(\.dimension, parseDimension, placeholder: "(smart|smart-opposite|width|height)"),
@@ -13,6 +14,7 @@ public struct ResizeCmdArgs: CmdArgs {
         ],
     )
 
+    public var zone: Bool = false
     public var dimension: Lateinit<ResizeCmdArgs.Dimension> = .uninitialized
     public var units: Lateinit<ResizeCmdArgs.Units> = .uninitialized
 

@@ -50,6 +50,16 @@ extension AxUiElementMock {
         if id?.isFirefox == true && get(Ax.minimizeButtonAttr)?.get(Ax.enabledAttr) != true {
             return true
         }
+        // Arc, Dia, and some Chromium variants expose PiP windows as always-on-top standard windows
+        // with disabled titlebar controls instead of omitting the controls entirely like Chrome does.
+        if id?.isChromium == true &&
+            windowLevel != .normalWindow &&
+            get(Ax.closeButtonAttr) != nil &&
+            get(Ax.minimizeButtonAttr)?.get(Ax.enabledAttr) != true &&
+            get(Ax.zoomButtonAttr)?.get(Ax.enabledAttr) != true
+        {
+            return true
+        }
         if id == .photoBooth { return true }
         if id == .ghostty {
             return get(Ax.fullscreenButtonAttr)?.get(Ax.enabledAttr) != true &&
@@ -70,11 +80,11 @@ extension AxUiElementMock {
         if get(Ax.fullscreenButtonAttr)?.get(Ax.enabledAttr) != true &&
             id != .gimp && // Gimp doesn't show fullscreen button
 
-            // "Drag out" a tab out of Chrome window. Technically, it shouldn't be necessary, but
+            // "Drag out" a tab out of a Chromium window. Technically, it shouldn't be necessary, but
             // apparently there is some sort of race condition between users releasing mouse up and
-            // Chrome reactivating the fullscreen button
+            // the browser reactivating the fullscreen button
             // todo: consider checking for fullscreen cirteria periodically (downside: will affect performance)
-            id != .chrome &&
+            id?.isChromium != true &&
 
             id != .activityMonitor && // Activity Monitor doesn't show fullscreen button
 
@@ -106,7 +116,7 @@ extension AxUiElementMock {
     ) -> Bool {
         if windowLevel != .normalWindow &&
             // Slowly roll out windowLevel for applications for which we have the appropriate dumps
-            (id == .slack || id == .chrome || id?.isFirefox == true || id == .braveBrowser || id == .screenstudio || id == .cleanshotx || id == .iterm2 || id == .outlook || id == .codex || id == .wisprFlow)
+            (id == .slack || id?.isChromium == true || id?.isFirefox == true || id == .braveBrowser || id == .screenstudio || id == .cleanshotx || id == .iterm2 || id == .outlook || id == .codex || id == .wisprFlow)
         {
             return false
         }

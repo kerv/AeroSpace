@@ -6,6 +6,47 @@ import XCTest
 final class LayoutCommandTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
+    func testCenteredFloatingFrameUsesSavedSizeAndStaysInsideZone() {
+        let zone = Rect(topLeftX: 100, topLeftY: 50, width: 800, height: 1000)
+        XCTAssertEqual(centeredFloatingFrame(in: zone, previousSize: nil), CGRect(x: 200, y: 200, width: 600, height: 700))
+        XCTAssertEqual(centeredFloatingFrame(in: zone, previousSize: CGSize(width: 400, height: 300)),
+                       CGRect(x: 300, y: 400, width: 400, height: 300))
+        XCTAssertEqual(centeredFloatingFrame(in: zone, previousSize: CGSize(width: 800, height: 1000)),
+                       CGRect(x: 200, y: 200, width: 600, height: 700))
+        XCTAssertEqual(centeredFloatingFrame(in: zone, previousSize: CGSize(width: 900, height: 1200)),
+                       CGRect(x: 200, y: 200, width: 600, height: 700))
+    }
+
+    func testFloatingGeometryPersistsAndAvoidsAmbiguousFallback() {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let memory = FloatingGeometryMemory(url: url)
+        let entry = FloatingGeometryMemory.Entry(appId: "example.app", title: "One", profile: "monitor",
+                                                  x: 50, y: 60, width: 500, height: 400)
+        memory.remember(entry)
+        let reloaded = FloatingGeometryMemory(url: url)
+        XCTAssertEqual(reloaded.find(appId: "example.app", title: "One", profile: "monitor", hasPeers: false), entry)
+        XCTAssertEqual(reloaded.find(appId: "example.app", title: "Changed", profile: "monitor", hasPeers: false), entry)
+        XCTAssertNil(reloaded.find(appId: "example.app", title: "Changed", profile: "monitor", hasPeers: true))
+        XCTAssertNil(reloaded.find(appId: "example.app", title: "One", profile: "different", hasPeers: false))
+    }
+
+    func testFloatingGeometryRestoresPositionAfterReload() async {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let previous = FloatingGeometryMemory.shared
+        defer { FloatingGeometryMemory.shared = previous; try? FileManager.default.removeItem(at: url) }
+        FloatingGeometryMemory.shared = FloatingGeometryMemory(url: url)
+        let workspace = focus.workspace
+        let bounds = workspace.workspaceMonitor.visibleRect
+        let rect = Rect(topLeftX: bounds.minX + 30, topLeftY: bounds.minY + 40, width: 400, height: 300)
+        let window = TestWindow.new(id: 876, parent: workspace.floatingWindowsContainer, rect: rect)
+        window.placementIdentityTitle = "Test window"
+        await rememberFloatingGeometry(window)
+        FloatingGeometryMemory.shared = FloatingGeometryMemory(url: url)
+        XCTAssertEqual(rememberedFloatingFrame(for: window, in: workspace, zone: bounds),
+                       CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height))
+    }
+
     func testParse() {
         assertNil(parseCommand("layout v_tiles h_tiles").errorOrNil)
         assertNil(parseCommand("layout tiling").errorOrNil)
@@ -347,4 +388,47 @@ final class LayoutCommandTest: XCTestCase {
         assertEquals(result.exitCode.rawValue, 0)
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
     }
+    func testStackTogglePreservesTileWeightsAndFocusCanChange() async {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let zone = workspace.zoneContainers["left"]!
+        let first = TestWindow.new(id: 111, parent: zone, adaptiveWeight: 300)
+        let second = TestWindow.new(id: 112, parent: zone, adaptiveWeight: 700)
+        XCTAssertTrue(first.focusWindow())
+        let original = [first.getWeight(zone.orientation), second.getWeight(zone.orientation)]
+        let stack = await parseCommand("layout stack tiles").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(stack.exitCode.rawValue, 0)
+        XCTAssertEqual(zone.layout, .stack)
+        XCTAssertTrue(second.focusWindow())
+        XCTAssertTrue(zone.mostRecentWindowRecursive === second)
+        let restore = await parseCommand("layout stack tiles").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(restore.exitCode.rawValue, 0)
+        XCTAssertEqual(zone.layout, .tiles)
+        XCTAssertEqual([first.getWeight(zone.orientation), second.getWeight(zone.orientation)], original)
+    }
+
+    func testZoneCycleTargetsZoneFromNestedWindow() async {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let zone = workspace.zoneContainers["left"]!
+        let other = workspace.zoneContainers["right"]!
+        let root = workspace.rootTilingContainer
+        let nested = TilingContainer.newVTiles(parent: zone, adaptiveWeight: 1)
+        XCTAssertTrue(TestWindow.new(id: 111, parent: nested).focusWindow())
+        TestWindow.new(id: 112, parent: nested)
+        zone.layout = .tiles
+        zone.changeOrientation(.h)
+        let command = parseCommand("layout --zone --cycle h_tiles v_tiles stack").cmdOrDie
+        let otherLayout = other.layout
+        let rootLayout = root.layout
+        for (layout, orientation) in [(Layout.tiles, Orientation.v), (.stack, .v), (.tiles, .h)] {
+            let result = await command.run(.defaultEnv, .emptyStdin)
+            XCTAssertEqual(result.exitCode.rawValue, 0)
+            XCTAssertEqual(zone.layout, layout)
+            XCTAssertEqual(zone.orientation, orientation)
+            XCTAssertEqual(other.layout, otherLayout)
+            XCTAssertEqual(root.layout, rootLayout)
+        }
+    }
+
 }

@@ -26,12 +26,30 @@ enum AxPermissionStatus: Equatable {
 @MainActor func updateTrayText() {
     let sortedMonitors = sortedMonitors
     let focus = focus
+    let zoneIndicator: String = {
+        let zc = focus.workspace.zoneContainers
+        guard !zc.isEmpty else { return "" }
+        let activeZoneName: String? = if let window = focus.windowOrNil,
+                                         let container = window.parents.first(where: { ($0 as? TilingContainer)?.isZoneContainer == true }) as? TilingContainer
+        {
+            zc.first { $0.value === container }?.key
+        } else {
+            focus.workspace.focusedZone
+        }
+        let parts = focus.workspace.activeZoneDefinitions.compactMap { def -> String? in
+            guard zc[def.id] != nil else { return nil }
+            return activeZoneName == def.id ? "[\(def.id)]" : def.id
+        }
+        return " : " + parts.joined(separator: " ")
+    }()
     TrayMenuModel.shared.trayText = (activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased())) " } ?? "") +
         sortedMonitors
         .map {
             let hasFullscreenWindows = $0.activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
             let activeWorkspaceName = hasFullscreenWindows ? "[\($0.activeWorkspace.name)]" : $0.activeWorkspace.name
-            return ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + activeWorkspaceName
+            let prefix = ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "")
+            let suffix = $0.activeWorkspace == focus.workspace ? zoneIndicator : ""
+            return prefix + activeWorkspaceName + suffix
         }
         .joined(separator: " │ ")
     TrayMenuModel.shared.workspaces = Workspace.all.map {
@@ -67,6 +85,29 @@ enum AxPermissionStatus: Equatable {
     if let mode {
         items.insert(mode, at: 0)
     }
+    let zoneContainers = focus.workspace.zoneContainers
+    if !zoneContainers.isEmpty {
+        let activeZoneName: String? = if let window = focus.windowOrNil,
+                                         let container = window.parents.first(where: { ($0 as? TilingContainer)?.isZoneContainer == true }) as? TilingContainer
+        {
+            zoneContainers.first { $0.value === container }?.key
+        } else {
+            // Fall back to the one-shot hint set by focus-zone on an empty zone
+            focus.workspace.focusedZone
+        }
+        for def in focus.workspace.activeZoneDefinitions {
+            if zoneContainers[def.id] != nil {
+                // Use the full zone ID as both the display label and the identity key so that
+                // zones with the same first letter (e.g. main/messages/music) remain distinct.
+                items.append(TrayItem(
+                    type: .zone,
+                    name: def.id,
+                    isActive: activeZoneName == def.id,
+                    hasFullscreenWindows: false,
+                ))
+            }
+        }
+    }
     TrayMenuModel.shared.trayItems = items
 }
 
@@ -82,6 +123,7 @@ struct WorkspaceViewModel: Hashable {
 enum TrayItemType: String, Hashable {
     case mode
     case workspace
+    case zone
 }
 
 private let validLetters = "A" ... "Z"
@@ -101,8 +143,8 @@ struct TrayItem: Hashable, Identifiable {
         let lowercasedName = name.lowercased()
         return switch type {
             case .mode: "\(lowercasedName).circle"
-            case .workspace where isActive: "\(lowercasedName).square.fill"
-            case .workspace: "\(lowercasedName).square"
+            case .workspace where isActive, .zone where isActive: "\(lowercasedName).square.fill"
+            case .workspace, .zone: "\(lowercasedName).square"
         }
     }
     var id: String {

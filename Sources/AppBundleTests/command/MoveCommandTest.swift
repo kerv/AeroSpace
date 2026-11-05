@@ -48,6 +48,35 @@ final class MoveCommandTest: XCTestCase {
         assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(1)]))
     }
 
+    func testMoveIntoEmptyZoneWithOppositeOrientation() async {
+        let workspace = Workspace.get(byName: name)
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let root = workspace.rootTilingContainer
+        let zone = workspace.zoneContainers["left"].orDie()
+        zone.changeOrientation(.v)
+        let window = TestWindow.new(id: 101, parent: root)
+        window.bind(to: root, adaptiveWeight: WEIGHT_AUTO, index: 0)
+        assertTrue(window.focusWindow())
+
+        let result = await parseCommand("move right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode.rawValue, 0)
+        assertTrue(window.parent === zone)
+    }
+
+    func testMoveBetweenZonesKeepsWindowInsideZone() async {
+        let workspace = Workspace.get(byName: name)
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let left = workspace.zoneContainers["left"].orDie()
+        let center = workspace.zoneContainers["center"].orDie()
+        center.changeOrientation(.v)
+        let window = TestWindow.new(id: 101, parent: left)
+        assertTrue(window.focusWindow())
+
+        let result = await parseCommand("move right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(result.exitCode.rawValue, 0)
+        assertTrue(window.parent === center)
+    }
+
     func testMove_swapWindows() async {
         let root = Workspace.get(byName: name).rootTilingContainer.apply {
             assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)
@@ -338,7 +367,7 @@ extension TreeNode {
                         container.orientation == .h
                             ? .h_tiles(container.children.map(\.layoutDescription))
                             : .v_tiles(container.children.map(\.layoutDescription))
-                    case .accordion:
+                    case .accordion, .stack:
                         container.orientation == .h
                             ? .h_accordion(container.children.map(\.layoutDescription))
                             : .v_accordion(container.children.map(\.layoutDescription))

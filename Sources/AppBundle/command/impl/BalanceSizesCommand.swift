@@ -15,10 +15,15 @@ struct BalanceSizesCommand: Command {
 
 @MainActor
 private func balance(_ parent: TilingContainer) {
+    // Preserve total weight so a following resize sees the same coordinate scale.
+    let equalWeight: CGFloat? = switch parent.layout {
+        case .tiles: CGFloat(parent.children.sumOfDouble { $0.getWeight(parent.orientation) }).div(parent.children.count)
+        case .accordion, .stack: nil
+    }
     for child in parent.children {
         switch parent.layout {
-            case .tiles: child.setWeight(parent.orientation, 1)
-            case .accordion: break // Do nothing
+            case .tiles: child.setWeight(parent.orientation, equalWeight ?? 1)
+            case .accordion, .stack: break // Do nothing
         }
         if let child = child as? TilingContainer {
             balance(child)

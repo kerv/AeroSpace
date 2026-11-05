@@ -82,6 +82,8 @@ func swapWindows(mruDominant window1: Window, _ window2: Window) {
 
     window2.bind(to: binding1.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding1.index)
     window1.bind(to: binding2.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding2.index)
+    rememberWindowPlacement(window1)
+    rememberWindowPlacement(window2)
 }
 
 extension CGPoint {
@@ -107,7 +109,7 @@ extension CGPoint {
                 tree.children.first(where: {
                     (virtual ? $0.lastAppliedLayoutVirtualRect : $0.lastAppliedLayoutPhysicalRect)?.contains(point) == true
                 })
-            case .accordion:
+            case .accordion, .stack:
                 tree.mostRecentChild
         }
         guard let target else { return nil }

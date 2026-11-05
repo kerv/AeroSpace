@@ -68,6 +68,14 @@ open class TreeNode: Equatable, AeroAny {
     @discardableResult
     func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) -> BindingData? {
         let result = unbindIfBound()
+        let adjustedIndex: Int
+        if index == INDEX_BIND_LAST {
+            adjustedIndex = newParent._children.count
+        } else if let result, result.parent === newParent, index > result.index {
+            adjustedIndex = index - 1
+        } else {
+            adjustedIndex = index
+        }
 
         if newParent === NilTreeNode.instance {
             return result
@@ -85,7 +93,7 @@ open class TreeNode: Equatable, AeroAny {
         } else {
             self.adaptiveWeight = adaptiveWeight
         }
-        newParent._children.insert(self, at: index != INDEX_BIND_LAST ? index : newParent._children.count)
+        newParent._children.insert(self, at: adjustedIndex)
         _parent = newParent
         unboundStacktrace = nil
         // todo consider disabling automatic mru propogation
@@ -152,6 +160,19 @@ struct BindingData {
     let parent: NonLeafTreeNodeObject
     let adaptiveWeight: CGFloat
     let index: Int
+    let preferredMostRecentChildAfterBind: TreeNode?
+
+    init(
+        parent: NonLeafTreeNodeObject,
+        adaptiveWeight: CGFloat,
+        index: Int,
+        preferredMostRecentChildAfterBind: TreeNode? = nil
+    ) {
+        self.parent = parent
+        self.adaptiveWeight = adaptiveWeight
+        self.index = index
+        self.preferredMostRecentChildAfterBind = preferredMostRecentChildAfterBind
+    }
 }
 
 final class NilTreeNode: TreeNode, NonLeafTreeNodeObject {

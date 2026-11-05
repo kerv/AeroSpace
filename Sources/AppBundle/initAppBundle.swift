@@ -28,10 +28,35 @@ import Foundation
             assumeCancellable: false,
             layoutWorkspaces: false,
         )
+        // gcMonitors() ran inside runHeavyCompleteRefreshSession above, so
+        // workspaceMonitor is now correctly mapped for every workspace.
+        // Activating zone containers here avoids the startup churn that occurred
+        // when the pre-refresh fallback to mainMonitor created zones on the wrong workspaces.
+
+        // If the focused workspace landed on a non-ultrawide but an ultrawide is available,
+        // migrate it there so zones activate for the user's primary workspace.
+        if let ultrawide = monitors.first(where: \.isUltrawide),
+           !focus.workspace.workspaceMonitor.isUltrawide,
+           focus.workspace.forceAssignedMonitor == nil
+        {
+            _ = ultrawide.setActiveWorkspace(focus.workspace)
+        }
+        for workspace in Workspace.all {
+            workspace.ensureZoneContainers(for: workspace.workspaceMonitor)
+        }
+        // Note: restoreZoneMemory() is called inside activateZones() (via ensureZoneContainers above).
+        // Since runHeavyCompleteRefreshSession already ran, windows are present when activateZones fires,
+        // so an explicit restoreZoneMemory() here would be a double-call and can crash when afterFocused
+        // insertion policy computes a stale index after unbind.
+        // Apply monitor-profile automation for the startup monitor configuration.
+        // Runs after base zone containers and zone memory are set up so that preset
+        // application and snapshot restore see a fully-initialized workspace tree.
+        applyMatchingMonitorProfile()
         try await runLightSession(.startup, .forceRun) {
             smartLayoutAtStartup()
             _ = await config.afterStartupCommand.run(.defaultEnv, .emptyStdin)
         }
+        ZoneScreenOverlayController.shared.startOptionMonitoring()
     }
 }
 

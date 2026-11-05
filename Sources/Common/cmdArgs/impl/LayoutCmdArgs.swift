@@ -8,11 +8,14 @@ public struct LayoutCmdArgs: CmdArgs {
             "--window-id": windowIdSubArgParser(),
             "--workspace": workspaceSubArgParser(),
             "--root": trueBoolFlag(\.root),
+            "--zone": trueBoolFlag(\.zone),
+            "--cycle": trueBoolFlag(\.cycle),
             "--fail-if-noop": trueBoolFlag(\.failIfNoop),
         ],
         posArgs: [newMandatoryPosArgParser(\.toggleBetween, parseToggleBetween, placeholder: LayoutDescription.unionLiteral)],
         conflictingOptions: [
             ["--window-id", "--workspace"],
+            ["--root", "--zone"],
         ],
     )
 
@@ -24,13 +27,15 @@ public struct LayoutCmdArgs: CmdArgs {
     }
 
     public enum LayoutDescription: String, CaseIterable, Equatable, Sendable {
-        case accordion, tiles
+        case accordion, tiles, stack
         case horizontal, vertical
         case h_accordion, v_accordion, h_tiles, v_tiles
-        case tiling, floating
+        case tiling, floating, sticky
     }
 
     public var root: Bool = false
+    public var zone: Bool = false
+    public var cycle: Bool = false
     public var failIfNoop: Bool = false
 }
 
@@ -65,10 +70,18 @@ func parseLayoutCmdArgs(_ args: StrArrSlice) -> ParsedCmd<LayoutCmdArgs> {
         .filter(layoutCommandRootFlagIncompatibilityMsg) { cmdArgs in
             !cmdArgs.root || cmdArgs.toggleBetween.val.allSatisfy {
                 switch $0 {
-                    case .floating, .tiling: false
-                    case .accordion, .h_accordion, .h_tiles,
+                    case .floating, .tiling, .sticky: false
+                    case .accordion, .stack, .h_accordion, .h_tiles,
                          .horizontal, .tiles, .v_accordion, .v_tiles,
                          .vertical: true
+                }
+            }
+        }
+        .filter("layout command: --zone and tiling|floating|sticky are incompatible") { cmdArgs in
+            !cmdArgs.zone || cmdArgs.toggleBetween.val.allSatisfy {
+                switch $0 {
+                    case .floating, .tiling, .sticky: false
+                    default: true
                 }
             }
         }

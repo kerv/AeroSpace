@@ -52,6 +52,11 @@ struct ReloadConfigResult {
         TrayMenuModel.shared.lastReloadConfigContainedWarnings = containsWarnings
         resetHotKeys()
         config = parseResult.config
+        defaultZonesConfig = config.zones
+        for workspace in Workspace.all {
+            workspace.ensureZoneContainers(for: workspace.workspaceMonitor, force: true)
+        }
+        applyMatchingMonitorProfile()
         configUrl = result.configUrl
         await activateMode_nonCancellable(activeMode)
         syncStartAtLogin()

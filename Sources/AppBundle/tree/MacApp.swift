@@ -374,7 +374,8 @@ private final class AxWindow {
 
     static func new(windowId: UInt32, _ ax: AXUIElement, _ nsApp: NSRunningApplication, _ job: RunLoopJob) throws -> AxWindow? {
         let handlers: HandlerToNotifKeyMapping = unsafe [
-            (refreshObs, [kAXUIElementDestroyedNotification, kAXWindowDeminiaturizedNotification, kAXWindowMiniaturizedNotification]),
+            (refreshObs, [kAXUIElementDestroyedNotification, kAXWindowMiniaturizedNotification]),
+            (deminiaturizeObs, [kAXWindowDeminiaturizedNotification]),
             (movedObs, [kAXMovedNotification]),
             (resizedObs, [kAXResizedNotification]),
         ]

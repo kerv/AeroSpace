@@ -1,0 +1,45 @@
+= aerospace-show-zone-picker(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-show-zone-picker
+// tag::purpose[]
+:manpurpose: Show a transient zone overlay for the focused ultrawide workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace show-zone-picker [-h|--help]
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+Displays a temporary HUD centered on the focused workspace's monitor. The overlay shows:
+
+- zone IDs
+- the active or pending zone
+- each zone's layout type
+- each zone's tiling window count
+- the current preset name
+
+When presentation mode is active, the overlay also marks that state.
+
+Clicking a zone card runs the equivalent of `focus-zone <zone-id>`.
+
+The overlay is command-first and transient: it dismisses itself automatically after a short timeout.
+
+The command only makes sense on workspaces where zones are currently active.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

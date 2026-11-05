@@ -47,6 +47,9 @@ let focus_monitor_help_generated = """
        OR: focus-monitor [-h|--help] [--wrap-around] (next|prev)
        OR: focus-monitor [-h|--help] [--] <monitor-pattern>...
     """
+let focus_zone_help_generated = """
+    USAGE: focus-zone [-h|--help] (<zone-id>)
+    """
 let focus_help_generated = """
     USAGE: focus [-h|--help] [--ignore-floating] [--wrap-around]
                  [--boundaries <boundary>] [--boundaries-action <action>]
@@ -54,6 +57,7 @@ let focus_help_generated = """
                  (left|down|up|right)
        OR: focus [-h|--help] [--ignore-floating] [--wrap-around]
                  [--boundaries <boundary>] [--boundaries-action <action>]
+                 [--scope <scope>]
                  (dfs-next|dfs-prev)
        OR: focus [-h|--help] --window-id <window-id>
        OR: focus [-h|--help] --dfs-index <dfs-index>
@@ -68,7 +72,7 @@ let join_with_help_generated = """
     """
 let layout_help_generated = """
     USAGE: layout [-h|--help] [--window-id <window-id>|--workspace <workspace>]
-                  [--root] [--fail-if-noop]
+                  [--root|--zone] [--cycle] [--fail-if-noop]
                   (<target-layout>)...
     """
 let list_apps_help_generated = """
@@ -107,6 +111,9 @@ let macos_native_minimize_help_generated = """
 let mode_help_generated = """
     USAGE: mode [-h|--help] [--] <binding-mode>
     """
+let move_floating_to_zone_help_generated = """
+    USAGE: move-floating-to-zone [-h|--help] (<zone-id>)
+    """
 let move_mouse_help_generated = """
     USAGE: move-mouse [-h|--help] [--fail-if-noop] <mouse-position>
     """
@@ -123,6 +130,9 @@ let move_node_to_workspace_help_generated = """
        OR: move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if-noop]
                                   [--window-id <window-id>] [--] <workspace-name>
     """
+let move_node_to_zone_help_generated = """
+    USAGE: move-node-to-zone [-h|--help] (<zone-id>)
+    """
 let move_workspace_to_monitor_help_generated = """
     USAGE: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] [--wrap-around] (left|down|up|right)
        OR: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] [--wrap-around] (next|prev)
@@ -133,15 +143,26 @@ let move_help_generated = """
                 [--boundaries-action <boundary-action>] [--fail-if-fullscreen]
                 [--fail-if-macos-native-fullscreen] (left|down|up|right)
     """
+let overview_zones_help_generated = """
+    USAGE: overview-zones [-h|--help]
+    """
+let presentation_mode_help_generated = """
+    USAGE: presentation-mode [-h|--help] on
+       OR: presentation-mode [-h|--help] off
+       OR: presentation-mode [-h|--help] toggle
+    """
 let reload_config_help_generated = """
     USAGE: reload-config [-h|--help] [--no-gui] [--dry-run] [--warnings-as-errors]
     """
 let resize_help_generated = """
-    USAGE: resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|width|height) [+|-]<number>
+    USAGE: resize [-h|--help] [--window-id <window-id>] [--zone] (smart|smart-opposite|width|height) [+|-]<number>
     """
 let run_callback_help_generated = """
     USAGE: run-callback [-h|--help] [--for-every-window|--window-id <window-id>] on-window-detected
        OR: run-callback [-h|--help] (on-focus-changed|on-focused-monitor-changed)
+    """
+let show_zone_picker_help_generated = """
+    USAGE: show-zone-picker [-h|--help]
     """
 let split_help_generated = """
     USAGE: split [-h|--help] [--window-id <window-id>] (horizontal|vertical|opposite)
@@ -181,4 +202,31 @@ let workspace_back_and_forth_help_generated = """
 let workspace_help_generated = """
     USAGE: workspace [-h|--help] [--auto-back-and-forth] [--fail-if-noop] [--] <workspace-name>
        OR: workspace [-h|--help] [--wrap-around] [--stdin|--no-stdin] (next|prev)
+    """
+let zone_memory_help_generated = """
+    USAGE: zone-memory [-h|--help] list [--count] [--json]
+       OR: zone-memory [-h|--help] clear (--app-id <app-bundle-id>|--all)
+    """
+
+let scratchpad_help_generated = """
+    USAGE: scratchpad [-h|--help]
+    """
+
+let send_to_scratchpad_help_generated = """
+    USAGE: send-to-scratchpad [-h|--help] [--window-id <window-id>]
+    """
+
+let workspace_snapshot_help_generated = """
+    USAGE: workspace-snapshot [-h|--help] (save|restore) <snapshot-name>
+    """
+
+let zone_focus_mode_help_generated = """
+    USAGE: zone-focus-mode [-h|--help] [--zone <zone>] (on|off|toggle)
+    """
+
+let zone_preset_help_generated = """
+    USAGE: zone-preset [-h|--help] <preset-name>
+       OR: zone-preset [-h|--help] --reset
+       OR: zone-preset [-h|--help] --save <name>
+       OR: zone-preset [-h|--help] --export
     """

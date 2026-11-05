@@ -1,0 +1,48 @@
+= aerospace-overview-zones(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-overview-zones
+// tag::purpose[]
+:manpurpose: Show an interactive zone overview HUD for the focused ultrawide workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace overview-zones [-h|--help]
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+Displays a persistent HUD centered on the focused workspace's monitor. The overview shows:
+
+- proportional zone columns based on current live zone widths
+- zone IDs
+- layout type
+- window counts
+- active or pending zone state
+- current preset name
+- presentation-mode state
+
+The overview stays command-backed:
+
+- clicking `Focus` runs the equivalent of `focus-zone <zone-id>`
+- `Cycle Layout` runs `layout` against the zone's current window when one exists
+- the preset menu runs `zone-preset <name>` or `zone-preset --reset`
+- the presentation button runs `presentation-mode toggle`
+
+The command only makes sense on workspaces where zones are currently active.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

@@ -68,6 +68,13 @@ struct MenuBarLabel: View {
                         itemView(for: trayItem)
                             .opacity(item.isVisible ? 1 : 0.5)
                     }
+                    let zoneItems = viewModel.trayItems.filter { $0.type == .zone }
+                    if !zoneItems.isEmpty {
+                        modeSeparator(with: .monospaced)
+                        ForEach(zoneItems, id: \.id) { item in
+                            itemView(for: item)
+                        }
+                    }
             }
         }
     }
@@ -79,7 +86,11 @@ struct MenuBarLabel: View {
     }
 
     private var squares: some View {
-        ForEach(viewModel.trayItems, id: \.id) { item in
+        let firstZoneId = viewModel.trayItems.first { $0.type == .zone }?.id
+        return ForEach(viewModel.trayItems, id: \.id) { item in
+            if item.type == .zone && item.id == firstZoneId {
+                modeSeparator(with: .monospaced)
+            }
             itemView(for: item)
             if item.type == .mode {
                 modeSeparator(with: .monospaced)

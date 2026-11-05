@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-enum Json: Encodable, Equatable { // todo rename to Dto? (data transfer object)
+enum Json: Encodable, Equatable {
     // vector
     case dict(JsonDict)
     case array(JsonArray)
@@ -10,6 +10,7 @@ enum Json: Encodable, Equatable { // todo rename to Dto? (data transfer object)
     case null
     case string(String)
     case int(Int64)
+    case float(Double)
     case bool(Bool)
 
     typealias JsonDict = [String: Json]
@@ -21,6 +22,7 @@ enum Json: Encodable, Equatable { // todo rename to Dto? (data transfer object)
             case .dict(let value): try value.encode(to: encoder)
             case .string(let value): try value.encode(to: encoder)
             case .int(let value): try value.encode(to: encoder)
+            case .float(let value): try value.encode(to: encoder)
             case .bool(let value): try value.encode(to: encoder)
             case .null: try (nil as String?).encode(to: encoder)
         }
@@ -42,6 +44,8 @@ enum Json: Encodable, Equatable { // todo rename to Dto? (data transfer object)
             case let value as Int: .int(Int64(value))
             case let value as UInt32: .int(Int64(value))
             case let value as UInt: .int(Int64(value))
+            case let value as Double: .float(value)
+            case let value as Float: .float(Double(value))
             case let value as Bool: .bool(value)
             case let value as String: .string(value)
             case nil, is NSNull: .null
@@ -63,6 +67,7 @@ enum Json: Encodable, Equatable { // todo rename to Dto? (data transfer object)
 
             case .bool(let x): x
             case .int(let x): x
+            case .float(let x): x
             case .string(let x): x
         }
     }
@@ -73,7 +78,43 @@ enum Json: Encodable, Equatable { // todo rename to Dto? (data transfer object)
         if case .int(let value) = self { value } else { nil }
     }
 
+    var asIntOrNil: Int? {
+        asInt64OrNil.flatMap { Int.init(exactly: $0) }
+    }
+
+    var asDoubleOrNil: Double? {
+        switch self {
+            case .float(let v): v
+            case .int(let v): Double(v)
+            default: nil
+        }
+    }
+
+    var asStringOrNil: String? {
+        if case .string(let value) = self { value } else { nil }
+    }
+
+    var asBoolOrNil: Bool? {
+        if case .bool(let value) = self { value } else { nil }
+    }
+
     var asDictOrNil: JsonDict? {
         if case .dict(let value) = self { value } else { nil }
+    }
+
+    var asArrayOrNil: JsonArray? {
+        if case .array(let value) = self { value } else { nil }
+    }
+
+    var tomlType: TomlType {
+        switch self {
+            case .dict: return .table
+            case .array: return .array
+            case .null: return .null
+            case .string: return .string
+            case .int: return .int
+            case .float: return .float
+            case .bool: return .bool
+        }
     }
 }

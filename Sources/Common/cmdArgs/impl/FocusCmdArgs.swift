@@ -14,6 +14,7 @@ public struct FocusCmdArgs: CmdArgs {
             "--fail-if-fullscreen": trueBoolFlag(\.failIfFullscreen),
             "--fail-if-macos-native-fullscreen": trueBoolFlag(\.failIfMacosNativeFullscreen),
             "--wrap-around": trueBoolFlag(\.wrapAroundAlias),
+            "--scope": ArgParser(\.rawScope, upcastArgParserFun(parseFocusScope)),
         ],
         posArgs: [ArgParser(\.cardinalOrDfsDirection, upcastArgParserFun(parseCardinalOrDfsDirection))],
         conflictingOptions: [
@@ -30,6 +31,7 @@ public struct FocusCmdArgs: CmdArgs {
     public var dfsIndex: UInt32? = nil
     public var cardinalOrDfsDirection: CardinalOrDfsDirection? = nil
     public var floatingAsTiling: Bool = true
+    public var rawScope: FocusScope? = nil
 
     public init(rawArgs: StrArrSlice, cardinalOrDfsDirection: CardinalOrDfsDirection) {
         self.commonState = .init(rawArgs)
@@ -55,6 +57,10 @@ public struct FocusCmdArgs: CmdArgs {
         case fail = "fail"
         case wrapAroundTheWorkspace = "wrap-around-the-workspace"
         case wrapAroundAllMonitors = "wrap-around-all-monitors"
+    }
+    public enum FocusScope: String, CaseIterable, Equatable, Sendable {
+        case workspace
+        case currentContainer = "current-container"
     }
 }
 
@@ -93,6 +99,7 @@ extension FocusCmdArgs {
     public var boundariesAction: WhenBoundariesCrossed {
         wrapAroundAlias ? .wrapAroundTheWorkspace : (rawBoundariesAction ?? .stop)
     }
+    public var scope: FocusScope { rawScope ?? .workspace }
 }
 
 func parseFocusCmdArgs(_ args: StrArrSlice) -> ParsedCmd<FocusCmdArgs> {
@@ -123,6 +130,9 @@ func parseFocusCmdArgs(_ args: StrArrSlice) -> ParsedCmd<FocusCmdArgs> {
         .filter("(dfs-next|dfs-prev) only supports --boundaries workspace") {
             $0.target.isDfsRelative.implies($0.boundaries == .workspace)
         }
+        .filter("--scope is only valid with (dfs-next|dfs-prev)") {
+            $0.rawScope == nil || $0.target.isDfsRelative
+        }
 }
 
 private func parseBoundariesAction(i: SubArgParserInput) -> ParsedCliArgs<FocusCmdArgs.WhenBoundariesCrossed> {
@@ -138,5 +148,13 @@ private func parseBoundaries(i: SubArgParserInput) -> ParsedCliArgs<FocusCmdArgs
         return .init(parseEnum(arg, FocusCmdArgs.Boundaries.self), advanceBy: 1)
     } else {
         return .fail("<boundary> is mandatory", advanceBy: 0)
+    }
+}
+
+private func parseFocusScope(i: SubArgParserInput) -> ParsedCliArgs<FocusCmdArgs.FocusScope> {
+    if let arg = i.nonFlagArgOrNil() {
+        return .init(parseEnum(arg, FocusCmdArgs.FocusScope.self), advanceBy: 1)
+    } else {
+        return .fail("<scope> is mandatory", advanceBy: 0)
     }
 }

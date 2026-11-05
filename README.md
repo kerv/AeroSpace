@@ -1,5 +1,7 @@
 # AeroSpace Beta [![Build](https://github.com/nikitabobko/AeroSpace/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/nikitabobko/AeroSpace/actions/workflows/build.yml)
 
+> **Zones fork:** This branch builds on AeroSpace v0.21.3-Beta and the [johnstegeman zones branch](https://github.com/johnstegeman/AeroSpace/tree/zones). See the [migration guide](./docs/zones-migration.md) before switching from upstream. The Homebrew command below installs upstream AeroSpace, not this fork. The upstream `main` branch has moved ahead of this fork's base.
+
 <img src="./resources/Assets.xcassets/AppIcon.appiconset/icon.png" width="40%" align="right">
 
 AeroSpace is an i3-like tiling window manager for macOS
@@ -9,6 +11,7 @@ Videos:
 - [YouTube Guide by Josean Martinez](https://www.youtube.com/watch?v=-FoWClVHG5g)
 
 Docs:
+- [Zones fork: migration and optional bindings](./docs/zones-migration.md)
 - [AeroSpace Guide](https://nikitabobko.github.io/AeroSpace/guide)
 - [AeroSpace Commands](https://nikitabobko.github.io/AeroSpace/commands)
 - [AeroSpace Goodies](https://nikitabobko.github.io/AeroSpace/goodies)

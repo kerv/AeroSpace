@@ -43,11 +43,90 @@ extension TreeNode {
             case .tilingContainer(let container):
                 lastAppliedLayoutPhysicalRect = physicalRect
                 lastAppliedLayoutVirtualRect = virtual
+                // Apply per-zone outer-gap overrides. Each override is absolute (pixels from screen edge),
+                // so the delta is (override - global). A value below the global expands the zone toward the edge.
+                var layoutPoint = point
+                var layoutWidth = width
+                var layoutHeight = height
+                if container.isZoneContainer,
+                   let zoneName = context.workspace.zoneContainers.first(where: { $0.value === container })?.key,
+                   let ov = config.zones.overrides[zoneName]
+                {
+                    let g = context.resolvedGaps.outer
+                    let dTop    = CGFloat((ov.top    ?? g.top)    - g.top)
+                    let dBottom = CGFloat((ov.bottom ?? g.bottom) - g.bottom)
+                    let dLeft   = CGFloat((ov.left   ?? g.left)   - g.left)
+                    let dRight  = CGFloat((ov.right  ?? g.right)  - g.right)
+                    layoutPoint.x += dLeft
+                    layoutPoint.y += dTop
+                    layoutWidth  -= dLeft + dRight
+                    layoutHeight -= dTop  + dBottom
+                }
+                // Reserve space for the accordion indicator overlay when it will be shown.
+                // The indicator only appears for accordion zones with >1 window, so only inset then.
+                // Update lastAppliedLayoutPhysicalRect to the inset rect so AccordionIndicatorManager
+                // anchors the overlay panel flush with the zone edge rather than outside it.
+                if container.isZoneContainer,
+                   container.layout == .accordion,
+                   container.children.count > 1,
+                   config.accordionIndicator.enabled
+                {
+                    let indicatorMargin: CGFloat = 4 // must match AccordionIndicator.swift
+                    let ind = config.accordionIndicator
+                    let inset = CGFloat(ind.iconSize + ind.barPadding * 2) + indicatorMargin
+                    switch ind.position {
+                        case .left:
+                            layoutPoint.x += inset
+                            layoutWidth  -= inset
+                        case .right:
+                            layoutWidth  -= inset
+                        case .top:
+                            layoutPoint.y += inset
+                            layoutHeight -= inset
+                        case .bottom:
+                            layoutHeight -= inset
+                    }
+                    lastAppliedLayoutPhysicalRect = Rect(
+                        topLeftX: layoutPoint.x, topLeftY: layoutPoint.y,
+                        width: layoutWidth, height: layoutHeight,
+                    )
+                }
+                // Reserve space for the stack indicator bar when it will be shown.
+                // The bar is anchored inside the zone; content is inset away from the bar edge.
+                // Update lastAppliedLayoutPhysicalRect to the inset (content) rect so
+                // StackIndicatorManager can compute the bar position relative to content.
+                if container.isZoneContainer,
+                   container.layout == .stack,
+                   !container.children.isEmpty,
+                   config.stackIndicator.enabled
+                {
+                    let ind = config.stackIndicator
+                    let barMargin: CGFloat = 4 // must match StackIndicator.swift
+                    let barInset = CGFloat(ind.barHeight) + barMargin
+                    switch ind.position {
+                        case .top:
+                            layoutPoint.y += barInset
+                            layoutHeight  -= barInset
+                        case .bottom:
+                            layoutHeight  -= barInset
+                        case .left:
+                            layoutPoint.x += barInset
+                            layoutWidth   -= barInset
+                        case .right:
+                            layoutWidth   -= barInset
+                    }
+                    lastAppliedLayoutPhysicalRect = Rect(
+                        topLeftX: layoutPoint.x, topLeftY: layoutPoint.y,
+                        width: layoutWidth, height: layoutHeight,
+                    )
+                }
                 switch container.layout {
                     case .tiles:
-                        try await container.layoutTiles(point, width: width, height: height, virtual: virtual, context)
+                        try await container.layoutTiles(layoutPoint, width: layoutWidth, height: layoutHeight, virtual: virtual, context)
                     case .accordion:
-                        try await container.layoutAccordion(point, width: width, height: height, virtual: virtual, context)
+                        try await container.layoutAccordion(layoutPoint, width: layoutWidth, height: layoutHeight, virtual: virtual, context)
+                    case .stack:
+                        try await container.layoutStack(layoutPoint, width: layoutWidth, height: layoutHeight, virtual: virtual, context)
                 }
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
                  .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
@@ -116,7 +195,9 @@ extension TilingContainer {
         let lastIndex = children.indices.last
         for (i, child) in children.enumerated() {
             child.setWeight(orientation, child.getWeight(orientation) + delta)
-            let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
+            let rawGap = (child as? TilingContainer)?.isZoneContainer == true
+                ? Double(config.zones.gap)
+                : context.resolvedGaps.inner.get(orientation).toDouble()
             // Gaps. Consider 4 cases:
             // 1. Multiple children. Layout first child
             // 2. Multiple children. Layout last child
@@ -142,35 +223,68 @@ extension TilingContainer {
 
     @MainActor
     fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
-        guard let mruIndex: Int = mostRecentChild?.ownIndex else { return }
-        for (index, child) in children.enumerated() {
-            let padding = CGFloat(config.accordionPadding)
-            let (lPadding, rPadding): (CGFloat, CGFloat) = switch index {
-                case 0 where children.count == 1: (0, 0)
-                case 0:                           (0, padding)
-                case children.indices.last:       (padding, 0)
-                case mruIndex - 1:                (0, 2 * padding)
-                case mruIndex + 1:                (2 * padding, 0)
-                default:                          (padding, padding)
+        let n = children.count
+        if config.accordion.mode == .cascade && n > 1 {
+            let offsetX = CGFloat(config.accordion.offsetX)
+            let offsetY = CGFloat(config.accordion.offsetY)
+            let totalOffsetX = offsetX * CGFloat(n - 1)
+            let totalOffsetY = offsetY * CGFloat(n - 1)
+            let windowWidth = max(1, width - totalOffsetX)
+            let windowHeight = max(1, height - totalOffsetY)
+            for (i, child) in children.enumerated() {
+                try await child.layoutRecursive(
+                    point + CGPoint(x: CGFloat(i) * offsetX, y: CGFloat(i) * offsetY),
+                    width: windowWidth,
+                    height: windowHeight,
+                    virtual: virtual,
+                    context,
+                )
             }
-            switch orientation {
-                case .h:
-                    try await child.layoutRecursive(
-                        point + CGPoint(x: lPadding, y: 0),
-                        width: width - rPadding - lPadding,
-                        height: height,
-                        virtual: virtual,
-                        context,
-                    )
-                case .v:
-                    try await child.layoutRecursive(
-                        point + CGPoint(x: 0, y: lPadding),
-                        width: width,
-                        height: height - lPadding - rPadding,
-                        virtual: virtual,
-                        context,
-                    )
+        } else {
+            guard let mruIndex: Int = mostRecentChild?.ownIndex else { return }
+            for (index, child) in children.enumerated() {
+                let padding = CGFloat(config.accordion.padding)
+                let (lPadding, rPadding): (CGFloat, CGFloat) = switch index {
+                    case 0 where n == 1:        (0, 0)
+                    case 0:                     (0, padding)
+                    case n - 1:                 (padding, 0)
+                    case mruIndex - 1:          (0, 2 * padding)
+                    case mruIndex + 1:          (2 * padding, 0)
+                    default:                    (padding, padding)
+                }
+                switch orientation {
+                    case .h:
+                        try await child.layoutRecursive(
+                            point + CGPoint(x: lPadding, y: 0),
+                            width: width - rPadding - lPadding,
+                            height: height,
+                            virtual: virtual,
+                            context,
+                        )
+                    case .v:
+                        try await child.layoutRecursive(
+                            point + CGPoint(x: 0, y: lPadding),
+                            width: width,
+                            height: height - lPadding - rPadding,
+                            virtual: virtual,
+                            context,
+                        )
+                }
             }
+        }
+    }
+
+    /// Stack layout: all children occupy the same rect (stacked on top of each other).
+    /// Only the most-recently-focused child is visible; others are behind it in z-order.
+    /// The active child is laid out last so macOS window focus brings it to the front.
+    @MainActor
+    fileprivate func layoutStack(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+        let activeChild = mostRecentChild
+        for child in children where child !== activeChild {
+            try await child.layoutRecursive(point, width: width, height: height, virtual: virtual, context)
+        }
+        if let activeChild {
+            try await activeChild.layoutRecursive(point, width: width, height: height, virtual: virtual, context)
         }
     }
 }

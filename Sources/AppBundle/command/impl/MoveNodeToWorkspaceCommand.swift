@@ -37,9 +37,46 @@ func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io:
                 .succ(io.err("Window '\(window.windowId)' already belongs to workspace '\(targetWorkspace.name)'. Tip: use --fail-if-noop to exit with non-zero code"))
         }
     }
-    let targetContainer: NonLeafTreeNodeObject = window.isFloating
-        ? targetWorkspace.floatingWindowsContainer
-        : targetWorkspace.rootTilingContainer
-    window.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: index)
+    let previousWorkspace = window.nodeWorkspace
+    rememberWindowPlacement(window, makeCurrent: false)
+    targetWorkspace.ensureZoneContainers(for: targetWorkspace.workspaceMonitor)
+    let targetContainer: NonLeafTreeNodeObject
+    let zoneBinding: BindingData?
+    if window.isFloating {
+        targetContainer = targetWorkspace.floatingWindowsContainer
+        zoneBinding = nil
+    } else if let remembered = rememberedBinding(for: window, in: targetWorkspace) {
+        targetContainer = remembered.parent
+        zoneBinding = remembered
+    } else if !targetWorkspace.zoneContainers.isEmpty {
+        let profile = MonitorProfile([targetWorkspace.workspaceMonitor])
+        if let zoneName = ZoneMemory.shared.rememberedZone(for: window, profile: profile),
+           let decision = targetWorkspace.resolveZonePlacement(preferredZoneName: zoneName, source: .zoneMemory)
+        {
+            targetContainer = decision.bindingData.parent
+            zoneBinding = decision.bindingData
+        } else {
+            let fallback = targetWorkspace.resolveZonePlacement(
+                preferredZoneName: targetWorkspace.activeZoneDefinitions.isEmpty
+                    ? nil
+                    : targetWorkspace.activeZoneDefinitions[targetWorkspace.activeZoneDefinitions.count / 2].id,
+                source: .middleZoneFallback
+            )
+            targetContainer = fallback?.bindingData.parent ?? targetWorkspace.rootTilingContainer
+            zoneBinding = fallback?.bindingData
+        }
+    } else {
+        targetContainer = targetWorkspace.rootTilingContainer
+        zoneBinding = nil
+    }
+    let resolvedBinding = zoneBinding ?? BindingData(parent: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: index)
+    window.bind(to: resolvedBinding.parent, adaptiveWeight: resolvedBinding.adaptiveWeight, index: resolvedBinding.index)
+    resolvedBinding.preferredMostRecentChildAfterBind?.markAsMostRecentChild()
+    rememberWindowPlacement(window)
+    previousWorkspace?.rememberDockedZoneLayout()
+    targetWorkspace.rememberDockedZoneLayout()
+    if !targetWorkspace.isScratchpad {
+        ScratchpadMemory.shared.forget(windowId: window.windowId)
+    }
     return .from(bool: focusFollowsWindow ? window.focusWindow() : true)
 }

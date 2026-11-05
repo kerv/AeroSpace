@@ -1,4 +1,6 @@
 extension Monitor {
+    var isUltrawide: Bool { visibleRect.width / visibleRect.height > 2.1 }
+
     @MainActor
     var visibleRectPaddedByOuterGaps: Rect {
         let topLeft = visibleRect.topLeftCorner

@@ -1,0 +1,38 @@
+= aerospace-focus-zone(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-focus-zone
+// tag::purpose[]
+:manpurpose: Move focus to the most recently used window in a named zone (left, center, right)
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace focus-zone [-h|--help] (<zone-id>)
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+If the named zone contains windows, focus moves to the most recently focused window in that zone. The next new window will be placed in that zone (follows MRU).
+
+If the named zone is empty, sets a one-shot placement hint: the next new window will be placed in that zone, after which routing reverts to MRU.
+
+Zones are active only when the workspace is displayed on an ultrawide monitor (aspect ratio > 2.1:1). If zones are not active, the command is a no-op and prints an error to stderr.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+<zone-id>:: The name of the zone to focus.
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

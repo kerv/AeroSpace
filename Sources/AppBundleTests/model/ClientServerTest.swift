@@ -68,7 +68,7 @@ final class ClientServerTest: XCTestCase {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let testData: [(ServerEvent, String)] = [
-            (.focusChanged(windowId: 123, workspace: "1"),
+            (.focusChanged(windowId: 123, workspace: "1", appName: nil),
              #"{"_event":"focus-changed","windowId":123,"workspace":"1"}"#),
 
             (.focusedMonitorChanged(workspace: "2", monitorId_oneBased: 1),
@@ -83,8 +83,23 @@ final class ClientServerTest: XCTestCase {
             (.windowDetected(windowId: 456, workspace: "1", appBundleId: "com.example", appName: "Example"),
              #"{"_event":"window-detected","appBundleId":"com.example","appName":"Example","windowId":456,"workspace":"1"}"#),
 
+            (.windowRouted(windowId: 456, workspace: "1", appBundleId: "com.example", zoneName: "right", source: "zoneMemory"),
+             #"{"_event":"window-routed","appBundleId":"com.example","source":"zoneMemory","windowId":456,"workspace":"1","zoneName":"right"}"#),
+
             (.bindingTriggered(mode: "main", binding: "alt-h"),
              #"{"_event":"binding-triggered","binding":"alt-h","mode":"main"}"#),
+
+            (.zoneFocused(workspace: "1", zoneName: "center"),
+             #"{"_event":"zone-focused","workspace":"1","zoneName":"center"}"#),
+
+            (.zonePresetChanged(workspace: "1", presetName: "balanced"),
+             #"{"_event":"zone-preset-changed","presetName":"balanced","workspace":"1"}"#),
+
+            (.zoneLayoutChanged(workspace: "1", zoneName: "left", layout: "h_accordion"),
+             #"{"_event":"zone-layout-changed","layout":"h_accordion","workspace":"1","zoneName":"left"}"#),
+
+            (.zoneWindowCountChanged(workspace: "1", zoneName: "center", windowCount: 2),
+             #"{"_event":"zone-window-count-changed","windowCount":2,"workspace":"1","zoneName":"center"}"#),
         ]
         for (event, expectedJson) in testData {
             let data = try! encoder.encode(event)
@@ -100,7 +115,12 @@ final class ClientServerTest: XCTestCase {
             (#"{"_event":"focused-workspace-changed","workspace":"2","prevWorkspace":"1"}"#, .workspaceChanged),
             (#"{"_event":"mode-changed","mode":"resize"}"#, .modeChanged),
             (#"{"_event":"window-detected","windowId":456}"#, .windowDetected),
+            (#"{"_event":"window-routed","windowId":456,"zoneName":"right","source":"zoneMemory"}"#, .windowRouted),
             (#"{"_event":"binding-triggered","mode":"main","binding":"alt-h"}"#, .bindingTriggered),
+            (#"{"_event":"zone-focused","workspace":"1","zoneName":"center"}"#, .zoneFocused),
+            (#"{"_event":"zone-preset-changed","presetName":"balanced","workspace":"1"}"#, .zonePresetChanged),
+            (#"{"_event":"zone-layout-changed","layout":"h_accordion","workspace":"1","zoneName":"left"}"#, .zoneLayoutChanged),
+            (#"{"_event":"zone-window-count-changed","windowCount":2,"workspace":"1","zoneName":"center"}"#, .zoneWindowCountChanged),
         ]
         for (json, expectedEventType) in testData {
             let data = json.data(using: .utf8)!

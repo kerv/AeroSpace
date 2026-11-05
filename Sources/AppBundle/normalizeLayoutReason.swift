@@ -64,7 +64,22 @@ func exitMacOsNativeUnconventionalState(
         case .workspace:
             break // Not possible
         case .tilingContainer:
-            try await window.relayoutWindow(on: workspace, cm, forceTile: true)
+            if !workspace.zoneContainers.isEmpty,
+               let profile = workspace.activeZoneProfile,
+               let zoneName = ZoneMemory.shared.rememberedZone(for: window, profile: profile),
+               let decision = workspace.resolveZonePlacement(preferredZoneName: zoneName, source: .zoneMemory)
+            {
+                window.bind(
+                    to: decision.bindingData.parent,
+                    adaptiveWeight: decision.bindingData.adaptiveWeight,
+                    index: decision.bindingData.index
+                )
+                decision.bindingData.preferredMostRecentChildAfterBind?.markAsMostRecentChild()
+                recordPlacement(decision, for: window)
+                broadcastWindowRouted(decision, for: window)
+            } else {
+                try await window.relayoutWindow(on: workspace, cm, forceTile: true)
+            }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace, cm)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window

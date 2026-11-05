@@ -27,6 +27,7 @@ func runHeavyCompleteRefreshSession(
     layoutWorkspaces shouldLayoutWorkspaces: Bool = true,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) async {
+    aeroLog("refresh: \(event)")
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
     if !TrayMenuModel.shared.isEnabled { return }
@@ -39,12 +40,15 @@ func runHeavyCompleteRefreshSession(
             if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
             await refreshModel_nonCancellable()
-            try await refresh()
             gcMonitors()
+            try await refresh()
+            updateFocusCache(nativeFocused)
 
             updateTrayText()
             SecureInputPanel.shared.refresh()
             try await normalizeLayoutReason()
+            updateFocusCache(nativeFocused)
+            broadcastZoneStateChangesIfNeeded()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
         }
     }
@@ -70,6 +74,10 @@ func runLightSession<T>(
         if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }
         updateFocusCache(nativeFocused)
         let focusBefore = focus.windowOrNil
+        if let window = focusBefore as? MacWindow, window.placementIdentityTitle.isEmpty,
+           let title = try? await window.getTitle(.cancellable), !title.isEmpty {
+            window.placementIdentityTitle = title
+        }
 
         await refreshModel_nonCancellable()
         let result = try await body()
@@ -79,6 +87,7 @@ func runLightSession<T>(
 
         updateTrayText()
         SecureInputPanel.shared.refresh()
+        broadcastZoneStateChangesIfNeeded()
         if !event.isFocusFollowsMouse { try await layoutWorkspaces() }
         if focusBefore != focusAfter {
             focusAfter?.nativeFocus() // syncFocusToMacOs
@@ -125,6 +134,10 @@ private func refresh() async throws {
     let mapping = try await MacApp.refreshAllAndGetAliveWindowIds(frontmostAppBundleId: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
     let aliveWindowIds = mapping.values.flatMap(id).toSet()
 
+    // Capture all departing windows before any are removed, preserving their original order.
+    for window in MacWindow.allWindows where !aliveWindowIds.contains(window.windowId) {
+        rememberWindowPlacement(window)
+    }
     for window in MacWindow.allWindows {
         if !aliveWindowIds.contains(window.windowId) {
             window.garbageCollect(skipClosedWindowsCache: false)
@@ -148,6 +161,27 @@ func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutable
     }
 }
 
+/// Dedicated observer for AXWindowDeminiaturized.
+/// When a window comes back from the Dock we know *exactly* which window it is — focus it
+/// directly instead of relying on getNativeFocusedWindow(), which can still return the
+/// previously-active app/window until macOS updates frontmostApplication.
+func deminiaturizeObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
+    let windowId = ax.containingWindowId()
+    let notifStr = notif as String
+    Task { @MainActor in
+        guard let token: RunSessionGuard = .isServerEnabled else { return }
+        guard let windowId, let window = Window.get(byId: windowId) else {
+            // Window not yet registered; fall back to a normal refresh.
+            scheduleCancellableCompleteRefreshSession(.ax(notifStr))
+            return
+        }
+        aeroLog("deminiaturize: focusing window \(windowId) directly")
+        try await runLightSession(.ax(notifStr), token) {
+            _ = window.focusWindow()
+        }
+    }
+}
+
 enum OptimalHideCorner {
     case bottomLeftCorner, bottomRightCorner
 }
@@ -155,10 +189,13 @@ enum OptimalHideCorner {
 @MainActor
 private func layoutWorkspaces() async throws {
     if !TrayMenuModel.shared.isEnabled {
+        AccordionIndicatorManager.shared.hideAll()
+        StackIndicatorManager.shared.hideAll()
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
             try await workspace.layoutWorkspace() // Unhide tiling windows from corner
         }
+        await BorderController.shared.sync() // clears all borders when enabled = false
         return
     }
     let monitors = monitors
@@ -199,6 +236,25 @@ private func layoutWorkspaces() async throws {
             try await (window as! MacWindow).hideInCorner(corner) // todo as!
         }
     }
+
+    await BorderController.shared.sync()
+    await ZoneScreenOverlayController.shared.refresh()
+    AccordionIndicatorManager.shared.refresh()
+    // Pre-fetch AX titles for all windows visible in stack zones so the indicator can show
+    // window titles synchronously. Only done when the indicator is enabled and showTitle is on.
+    if config.stackIndicator.enabled && config.stackIndicator.showTitle {
+        let stackWindows: [MacWindow] = Workspace.all
+            .filter { $0.isVisible }
+            .flatMap { ws in ws.zoneContainers.values.filter { $0.layout == .stack }.flatMap { $0.allLeafWindowsRecursive } }
+            .compactMap { $0 as? MacWindow }
+        for window in stackWindows {
+            if let title = try? await window.macApp.getAxTitle(window.windowId, .cancellable) {
+                window.cachedTitle = title
+            }
+        }
+    }
+    StackIndicatorManager.shared.refresh()
+    await ZoneMenuBarController.shared.refresh()
 }
 
 @MainActor

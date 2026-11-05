@@ -1,0 +1,38 @@
+= aerospace-move-floating-to-zone(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-move-floating-to-zone
+// tag::purpose[]
+:manpurpose: Reposition a floating window into a named zone (left, center, right) without converting it to a tiling window
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace move-floating-to-zone [-h|--help] (<zone-id>)
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+The window is not resized. Its position within the target zone mirrors where it was positioned within its current zone (or the monitor rect if it was outside all zones). After the move the zone assignment is saved to zone memory so that a subsequent `move-node-to-zone` lands the window in the correct zone.
+
+Zones are active only when the workspace is displayed on an ultrawide monitor (aspect ratio > 2.1:1). If zones are not active, the command is a no-op and prints an error to stderr.
+
+If the focused window is not floating the command prints an error to stderr.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+<zone-id>:: The name of the zone to move the floating window into.
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

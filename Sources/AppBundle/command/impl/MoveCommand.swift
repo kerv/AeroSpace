@@ -6,6 +6,24 @@ struct MoveCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> BinaryExitCode {
+        let window = args.resolveTargetOrReportError(env, io)?.windowOrNil
+        let previousWorkspace = window?.nodeWorkspace
+        if let window { rememberWindowPlacement(window, makeCurrent: false) }
+        let result = await runMove(env, io)
+        if result == .succ, let window {
+            if let previousWorkspace {
+                rememberZoneArrangement(in: previousWorkspace)
+                previousWorkspace.rememberDockedZoneLayout()
+            }
+            if let workspace = window.nodeWorkspace, workspace !== previousWorkspace {
+                rememberZoneArrangement(in: workspace)
+                workspace.rememberDockedZoneLayout()
+            }
+        }
+        return result
+    }
+
+    @MainActor private func runMove(_ env: CmdEnv, _ io: CmdIo) async -> BinaryExitCode {
         let direction = args.direction.val
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }
         guard let currentWindow = target.windowOrNil else {
@@ -22,8 +40,8 @@ struct MoveCommand: Command {
             case .unbound: return .fail
             case .tilingContainer(let parent):
                 guard let indexOfCurrent = currentWindow.ownIndex else { return .fail(io.err(bugPrompt())) }
-                let indexOfSiblingTarget = indexOfCurrent + direction.focusOffset
-                if parent.orientation == direction.orientation && parent.children.indices.contains(indexOfSiblingTarget) {
+                let indexOfSiblingTarget = indexOfCurrent + direction.containerFocusOffset(parent)
+                if parent.matchesDirection(direction) && parent.children.indices.contains(indexOfSiblingTarget) {
                     switch parent.children[indexOfSiblingTarget].tilingTreeNodeCasesOrDie() {
                         case .tilingContainer(let topLevelSiblingTargetContainer):
                             return deepMoveIn(window: currentWindow, into: topLevelSiblingTargetContainer, moveDirection: direction, io)
@@ -122,6 +140,20 @@ private let moveOutMacosUnconventionalWindow = "moving macOS fullscreen, minimiz
         case .tilingContainer(let parent):
             check(parent.orientation == direction.orientation)
             guard let ownIndex = innerMostTilingContainer.ownIndex else { return .fail(io.err(bugPrompt())) }
+            if innerMostTilingContainer.isZoneContainer {
+                let nextIndex = ownIndex + direction.focusOffset
+                if parent.children.indices.contains(nextIndex),
+                   let nextZone = parent.children[nextIndex] as? TilingContainer,
+                   nextZone.isZoneContainer
+                {
+                    return deepMoveIn(window: window, into: nextZone, moveDirection: direction, io)
+                }
+                guard let workspace = parent.nodeWorkspace else { return .fail(io.err(bugPrompt())) }
+                if args.boundariesAction == .createImplicitContainer {
+                    return .succ
+                }
+                return hitWorkspaceBoundaries(window, workspace, io, args, direction, env)
+            }
             window.bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: ownIndex + direction.insertionOffset)
             return .succ
         case .workspace(let parent):
@@ -161,7 +193,7 @@ extension TilingTreeNodeCases {
         switch self {
             case .window:
                 self
-            case .tilingContainer(let container) where container.orientation == orientation:
+            case .tilingContainer(let container) where container.orientation == orientation || container.children.isEmpty:
                 .tilingContainer(container)
             case .tilingContainer(let container):
                 container.mostRecentChild.orDie("Empty containers must be detached during normalization")

@@ -5,6 +5,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case close
     case closeAllWindowsButCurrent = "close-all-windows-but-current"
     case config
+    case debugLogMarker = "debug-log-marker"
     case debugWindows = "debug-windows"
     case echo
     case enable
@@ -17,6 +18,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case focus
     case focusBackAndForth = "focus-back-and-forth"
     case focusMonitor = "focus-monitor"
+    case focusZone = "focus-zone"
     case fullscreen
     case joinWith = "join-with"
     case layout
@@ -24,6 +26,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case listExecEnvVars = "list-exec-env-vars"
     case listModes = "list-modes"
     case listMonitors = "list-monitors"
+    case listZones = "list-zones"
     case listWindows = "list-windows"
     case listWorkspaces = "list-workspaces"
     case macosNativeFullscreen = "macos-native-fullscreen"
@@ -33,10 +36,18 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case moveMouse = "move-mouse"
     case moveNodeToMonitor = "move-node-to-monitor"
     case moveNodeToWorkspace = "move-node-to-workspace"
+    case moveFloatingToZone = "move-floating-to-zone"
+    case moveNodeToZone = "move-node-to-zone"
     case moveWorkspaceToMonitor = "move-workspace-to-monitor"
+    case overviewZones = "overview-zones"
+    case presentationMode = "presentation-mode"
     case reloadConfig = "reload-config"
     case resize
     case runCallback = "run-callback"
+    case scratchpad
+    case sendToScratchpad = "send-to-scratchpad"
+    case showZonePicker = "show-zone-picker"
+    case showWorkspaceMenu = "show-workspace-menu"
     case split
     case subscribe
     case summonWorkspace = "summon-workspace"
@@ -50,6 +61,11 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case volume
     case workspace
     case workspaceBackAndForth = "workspace-back-and-forth"
+    case workspaceSnapshot = "workspace-snapshot"
+    case zone
+    case zoneMemory = "zone-memory"
+    case zoneFocusMode = "zone-focus-mode"
+    case zonePreset = "zone-preset"
 }
 
 func initSubcommands() -> [String: any SubCommandParserProtocol] {
@@ -64,6 +80,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(CloseAllWindowsButCurrentCmdArgs.init)
             case .config:
                 result[kind.rawValue] = SubCommandParser(parseConfigCmdArgs)
+            case .debugLogMarker:
+                result[kind.rawValue] = SubCommandParser(DebugLogMarkerCmdArgs.init)
             case .debugWindows:
                 result[kind.rawValue] = SubCommandParser(DebugWindowsCmdArgs.init)
             case .echo:
@@ -84,6 +102,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(FocusBackAndForthCmdArgs.init)
             case .focusMonitor:
                 result[kind.rawValue] = SubCommandParser(parseFocusMonitorCmdArgs)
+            case .focusZone:
+                result[kind.rawValue] = SubCommandParser(parseFocusZoneCmdArgs)
             case .fullscreen:
                 result[kind.rawValue] = SubCommandParser(parseFullscreenCmdArgs)
             case .joinWith:
@@ -98,6 +118,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseListModesCmdArgs)
             case .listMonitors:
                 result[kind.rawValue] = SubCommandParser(parseListMonitorsCmdArgs)
+            case .listZones:
+                result[kind.rawValue] = SubCommandParser(parseListZonesCmdArgs)
             case .listWindows:
                 result[kind.rawValue] = SubCommandParser(parseListWindowsCmdArgs)
             case .listWorkspaces:
@@ -118,16 +140,32 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseMoveNodeToMonitorCmdArgs)
             case .moveNodeToWorkspace:
                 result[kind.rawValue] = SubCommandParser(parseMoveNodeToWorkspaceCmdArgs)
+            case .moveFloatingToZone:
+                result[kind.rawValue] = SubCommandParser(parseMoveFloatingToZoneCmdArgs)
+            case .moveNodeToZone:
+                result[kind.rawValue] = SubCommandParser(parseMoveNodeToZoneCmdArgs)
             case .moveWorkspaceToMonitor:
                 result[kind.rawValue] = SubCommandParser(parseWorkspaceToMonitorCmdArgs)
                 // deprecated
                 result["move-workspace-to-display"] = SubCommandParser(MoveWorkspaceToMonitorCmdArgs.init)
+            case .overviewZones:
+                result[kind.rawValue] = SubCommandParser(parseOverviewZonesCmdArgs)
+            case .presentationMode:
+                result[kind.rawValue] = SubCommandParser(parsePresentationModeCmdArgs)
             case .reloadConfig:
                 result[kind.rawValue] = SubCommandParser(ReloadConfigCmdArgs.init)
             case .resize:
                 result[kind.rawValue] = SubCommandParser(parseResizeCmdArgs)
             case .runCallback:
                 result[kind.rawValue] = SubCommandParser(parseRunCallbackCmdArgs)
+            case .scratchpad:
+                result[kind.rawValue] = SubCommandParser(parseScratchpadCmdArgs)
+            case .sendToScratchpad:
+                result[kind.rawValue] = SubCommandParser(parseSendToScratchpadCmdArgs)
+            case .showZonePicker:
+                result[kind.rawValue] = SubCommandParser(parseShowZonePickerCmdArgs)
+            case .showWorkspaceMenu:
+                result[kind.rawValue] = SubCommandParser(parseShowWorkspaceMenuCmdArgs)
             case .split:
                 result[kind.rawValue] = SubCommandParser(parseSplitCmdArgs)
             case .subscribe:
@@ -150,6 +188,16 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseWorkspaceCmdArgs)
             case .workspaceBackAndForth:
                 result[kind.rawValue] = SubCommandParser(WorkspaceBackAndForthCmdArgs.init)
+            case .workspaceSnapshot:
+                result[kind.rawValue] = SubCommandParser(parseWorkspaceSnapshotCmdArgs)
+            case .zone:
+                result[kind.rawValue] = SubCommandParser(parseZoneCmdArgs)
+            case .zoneMemory:
+                result[kind.rawValue] = SubCommandParser(parseZoneMemoryCmdArgs)
+            case .zoneFocusMode:
+                result[kind.rawValue] = SubCommandParser(parseZoneFocusModeCmdArgs)
+            case .zonePreset:
+                result[kind.rawValue] = SubCommandParser(parseZonePresetCmdArgs)
         }
     }
     return result

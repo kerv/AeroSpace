@@ -4,6 +4,7 @@ import AppKit
 final class TestWindow: Window, CustomStringConvertible {
     private var _rect: Rect?
     var isMacosFullscreenForTest = false
+    override var isHiddenInCorner: Bool { false }
 
     @MainActor
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
@@ -39,6 +40,12 @@ final class TestWindow: Window, CustomStringConvertible {
 
     @MainActor override func getAxSize(_ cm: CancellationMode) async throws -> CGSize? {
         _rect.map { CGSize(width: $0.width, height: $0.height) }
+    }
+
+    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        let old = _rect ?? Rect(topLeftX: 0, topLeftY: 0, width: 0, height: 0)
+        _rect = Rect(topLeftX: topLeft?.x ?? old.topLeftX, topLeftY: topLeft?.y ?? old.topLeftY,
+                     width: size?.width ?? old.width, height: size?.height ?? old.height)
     }
 
     override func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { isMacosFullscreenForTest }

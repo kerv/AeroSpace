@@ -97,6 +97,16 @@ private func dumpWindowDebugInfo(_ window: Window, _ cm: CancellationMode) async
     result["Aero.App.nsApp.execPath"] = .stringOrNull(window.macApp.nsApp.executableURL?.description)
     result["Aero.App.nsApp.appBundlePath"] = .stringOrNull(window.macApp.nsApp.bundleURL?.description)
     result["Aero.AXApp"] = .dict(try await window.macApp.dumpAppAxInfo(cm))
+    result["Aero.placement.lastSource"] = .stringOrNull(window.lastPlacementRecord?.source.rawValue)
+    result["Aero.placement.lastZone"] = .stringOrNull(window.lastPlacementRecord?.zoneName)
+    result["Aero.placement.appRoutingZone"] = .stringOrNull(window.app.rawAppBundleId.flatMap { config.zones.appRouting[$0] })
+    let activeProfile = window.nodeWorkspace?.activeZoneProfile
+    result["Aero.zoneMemory.activeProfileKey"] = .stringOrNull(activeProfile?.key)
+    result["Aero.zoneMemory.rememberedZone"] = .stringOrNull(
+        activeProfile.flatMap { profile in
+            window.app.rawAppBundleId.flatMap { ZoneMemory.shared.rememberedZone(forBundleId: $0, profile: profile) }
+        }
+    )
 
     let isDialog = try await window.isDialogHeuristic(windowLevel, cm)
     let isWindow = try await window.isWindowHeuristic(windowLevel, cm)

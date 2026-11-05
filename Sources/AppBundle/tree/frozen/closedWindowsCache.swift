@@ -29,7 +29,11 @@ struct FrozenWorkspace: Sendable {
     @MainActor init(_ workspace: Workspace) {
         name = workspace.name
         monitor = FrozenMonitor(workspace.workspaceMonitor)
-        rootTilingNode = FrozenContainer(workspace.rootTilingContainer)
+        // Build an identity map so zone containers are tagged with their zone name in the frozen tree.
+        let zoneIdentityMap: [ObjectIdentifier: String] = workspace.zoneContainers.reduce(into: [:]) {
+            $0[ObjectIdentifier($1.value)] = $1.key
+        }
+        rootTilingNode = FrozenContainer(workspace.rootTilingContainer, zoneIdentityMap: zoneIdentityMap)
         floatingWindows = workspace.floatingWindows.map(FrozenWindow.init)
         macosUnconventionalWindows =
             workspace.macOsNativeHiddenAppsWindowsContainer.children.map { FrozenWindow($0 as! Window) } +
@@ -54,6 +58,7 @@ struct FrozenWorkspace: Sendable {
     if !closedWindowsCache.windowIds.contains(newlyDetectedWindow.windowId) {
         return false
     }
+    aeroLog("restoreClosedWindowsCache: triggered by window \(newlyDetectedWindow.windowId) (\(newlyDetectedWindow.app.rawAppBundleId ?? "?"))")
     let monitors = monitors
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
 
@@ -71,7 +76,10 @@ struct FrozenWorkspace: Sendable {
         let prevRoot = workspace.rootTilingContainer // Save prevRoot into a variable to avoid it being garbage collected earlier than needed
         let potentialOrphans = prevRoot.allLeafWindowsRecursive
         prevRoot.unbindFromParent()
-        restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST)
+        // Clear stale zoneContainers entries — they point to containers that were just unbound.
+        // restoreTreeRecursive will re-populate the dict for any zone containers it recreates.
+        workspace.zoneContainers = [:]
+        restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST, workspace: workspace)
         for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
             try await window.relayoutWindow(on: workspace, .cancellable, forceTile: true)
         }
@@ -87,7 +95,7 @@ struct FrozenWorkspace: Sendable {
 
 @discardableResult
 @MainActor
-private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonLeafTreeNodeObject, index: Int) -> Bool {
+private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonLeafTreeNodeObject, index: Int, workspace: Workspace? = nil) -> Bool {
     let container = TilingContainer(
         parent: parent,
         adaptiveWeight: frozenContainer.weight,
@@ -95,6 +103,12 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
         frozenContainer.layout,
         index: index,
     )
+    // Restore the isZoneContainer flag and re-register in the workspace's zoneContainers dict.
+    // This ensures normalizeContainers doesn't flatten or remove zone containers after a restore.
+    if let zoneName = frozenContainer.zoneName, let workspace {
+        container.isZoneContainer = true
+        workspace.zoneContainers[zoneName] = container
+    }
 
     for (index, child) in frozenContainer.children.enumerated() {
         switch child {

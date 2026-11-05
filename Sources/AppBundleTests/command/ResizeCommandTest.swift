@@ -163,4 +163,47 @@ final class ResizeCommandTest: XCTestCase {
         let result = await parseCommand("resize width +2").cmdOrDie.run(.defaultEnv, .emptyStdin)
         assertEquals(result.exitCode.rawValue, 2)
     }
+    func testZoneWidthResizesZoneNotHorizontalTilesInsideIt() async {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let left = workspace.zoneContainers["left"]!
+        left.changeOrientation(.h)
+        let first = TestWindow.new(id: 101, parent: left, adaptiveWeight: 100)
+        let second = TestWindow.new(id: 102, parent: left, adaptiveWeight: 100)
+        XCTAssertTrue(first.focusWindow())
+        let oldZoneWidth = left.getWeight(.h)
+        let oldFirstWidth = first.getWeight(.h)
+        let oldSecondWidth = second.getWeight(.h)
+        let result = await parseCommand("resize --zone width +50").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(result.exitCode.rawValue, 0)
+        XCTAssertEqual(left.getWeight(.h), oldZoneWidth + 50)
+        XCTAssertEqual(first.getWeight(.h), oldFirstWidth)
+        XCTAssertEqual(second.getWeight(.h), oldSecondWidth)
+    }
+
+    func testZoneWidthUsesFloatingWindowLocation() async {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let center = workspace.zoneContainers["center"]!
+        let window = TestWindow.new(id: 103, parent: workspace.floatingWindowsContainer,
+            rect: Rect(topLeftX: 800, topLeftY: 100, width: 200, height: 200))
+        XCTAssertTrue(window.focusWindow())
+        let oldWidth = center.getWeight(.h)
+        let result = await parseCommand("resize --zone width +50").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(result.exitCode.rawValue, 0)
+        XCTAssertEqual(center.getWeight(.h), oldWidth + 50)
+    }
+
+    func testZoneWidthRejectsInvalidSize() async {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let left = workspace.zoneContainers["left"]!
+        let window = TestWindow.new(id: 104, parent: left)
+        XCTAssertTrue(window.focusWindow())
+        let width = left.getWeight(.h)
+        let result = await parseCommand("resize --zone width -99999").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(result.exitCode.rawValue, BinaryExitCode.fail.rawValue)
+        XCTAssertEqual(left.getWeight(.h), width)
+    }
+
 }

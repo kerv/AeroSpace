@@ -16,6 +16,8 @@ extension CmdArgs {
                 command = CloseAllWindowsButCurrentCommand(args: self as! CloseAllWindowsButCurrentCmdArgs)
             case .config:
                 command = ConfigCommand(args: self as! ConfigCmdArgs)
+            case .debugLogMarker:
+                command = DebugLogMarkerCommand(args: self as! DebugLogMarkerCmdArgs)
             case .debugWindows:
                 command = DebugWindowsCommand(args: self as! DebugWindowsCmdArgs)
             case .echo:
@@ -34,6 +36,8 @@ extension CmdArgs {
                 command = FocusBackAndForthCommand(args: self as! FocusBackAndForthCmdArgs)
             case .focusMonitor:
                 command = FocusMonitorCommand(args: self as! FocusMonitorCmdArgs)
+            case .focusZone:
+                command = FocusZoneCommand(args: self as! FocusZoneCmdArgs)
             case .fullscreen:
                 command = FullscreenCommand(args: self as! FullscreenCmdArgs)
             case .joinWith:
@@ -48,6 +52,8 @@ extension CmdArgs {
                 command = ListModesCommand(args: self as! ListModesCmdArgs)
             case .listMonitors:
                 command = ListMonitorsCommand(args: self as! ListMonitorsCmdArgs)
+            case .listZones:
+                command = ListZonesCommand(args: self as! ListZonesCmdArgs)
             case .listWindows:
                 command = ListWindowsCommand(args: self as! ListWindowsCmdArgs)
             case .listWorkspaces:
@@ -66,14 +72,30 @@ extension CmdArgs {
                 command = MoveNodeToMonitorCommand(args: self as! MoveNodeToMonitorCmdArgs)
             case .moveNodeToWorkspace:
                 command = MoveNodeToWorkspaceCommand(args: self as! MoveNodeToWorkspaceCmdArgs)
+            case .moveFloatingToZone:
+                command = MoveFloatingToZoneCommand(args: self as! MoveFloatingToZoneCmdArgs)
+            case .moveNodeToZone:
+                command = MoveNodeToZoneCommand(args: self as! MoveNodeToZoneCmdArgs)
             case .moveWorkspaceToMonitor:
                 command = MoveWorkspaceToMonitorCommand(args: self as! MoveWorkspaceToMonitorCmdArgs)
+            case .overviewZones:
+                command = OverviewZonesCommand(args: self as! OverviewZonesCmdArgs)
+            case .presentationMode:
+                command = PresentationModeCommand(args: self as! PresentationModeCmdArgs)
             case .reloadConfig:
                 command = ReloadConfigCommand(args: self as! ReloadConfigCmdArgs)
             case .resize:
                 command = ResizeCommand(args: self as! ResizeCmdArgs)
             case .runCallback:
                 command = RunCallbackCommand(args: self as! RunCallbackCmdArgs)
+            case .scratchpad:
+                command = ScratchpadCommand(args: self as! ScratchpadCmdArgs)
+            case .sendToScratchpad:
+                command = SendToScratchpadCommand(args: self as! SendToScratchpadCmdArgs)
+            case .showZonePicker:
+                command = ShowZonePickerCommand(args: self as! ShowZonePickerCmdArgs)
+            case .showWorkspaceMenu:
+                command = ShowWorkspaceMenuCommand(args: self as! ShowWorkspaceMenuCmdArgs)
             case .split:
                 command = SplitCommand(args: self as! SplitCmdArgs)
             case .subscribe:
@@ -94,6 +116,16 @@ extension CmdArgs {
                 command = WorkspaceCommand(args: self as! WorkspaceCmdArgs)
             case .workspaceBackAndForth:
                 command = WorkspaceBackAndForthCommand(args: self as! WorkspaceBackAndForthCmdArgs)
+            case .workspaceSnapshot:
+                command = WorkspaceSnapshotCommand(args: self as! WorkspaceSnapshotCmdArgs)
+            case .zone:
+                command = ZoneCommand(args: self as! ZoneCmdArgs)
+            case .zoneMemory:
+                command = ZoneMemoryCommand(args: self as! ZoneMemoryCmdArgs)
+            case .zoneFocusMode:
+                command = ZoneFocusModeCommand(args: self as! ZoneFocusModeCmdArgs)
+            case .zonePreset:
+                command = ZonePresetCommand(args: self as! ZonePresetCmdArgs)
         }
         check(command.info == Self.info)
         return .cmd(command)

@@ -31,6 +31,8 @@ final class ListWindowsTest: XCTestCase {
         assertEquals(parseCommand("list-windows --all --format '%{right-padding}' --json").errorOrNil, "%{right-padding} interpolation variable is not allowed when --json is used")
         assertEquals(parseCommand("list-windows --all --format '%{window-title} |' --json").errorOrNil, "Only interpolation variables and spaces are allowed in \'--format\' when \'--json\' is used")
         assertNil(parseCommand("list-windows --all --format '%{window-title}' --json").errorOrNil)
+        assertNil(parseCommand("list-windows --all --format '%{zone-layout}'").errorOrNil)
+        assertNil(parseCommand("list-windows --all --format '%{window-zone}' --json").errorOrNil)
     }
 
     func testInterpolationVariablesConsistency() {
@@ -41,7 +43,9 @@ final class ListWindowsTest: XCTestCase {
                 case .app:
                     assertTrue(FormatVar.AppFormatVar.allCases.allSatisfy { $0.rawValue.starts(with: "app-") })
                 case .workspace:
-                    assertTrue(FormatVar.WorkspaceFormatVar.allCases.allSatisfy { $0.rawValue.starts(with: "workspace") })
+                    assertTrue(FormatVar.WorkspaceFormatVar.allCases.allSatisfy {
+                        $0.rawValue.starts(with: "workspace") || $0.rawValue.starts(with: "zone")
+                    })
                 case .monitor:
                     assertTrue(FormatVar.MonitorFormatVar.allCases.allSatisfy { $0.rawValue.starts(with: "monitor-") })
             }
@@ -72,6 +76,62 @@ final class ListWindowsTest: XCTestCase {
             ]
             assertSucc(windows.format([.interVar(.formatVar(.window(.windowId))), .interVar(.plainInterVar(.rightPadding)), .literal(" | "), .interVar(.formatVar(.window(.windowTitle)))]), ["2  | title1", "10 | title2"])
         }
+
+        let workspace = Workspace.get(byName: "zones")
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let center = workspace.zoneContainers["center"].orDie()
+        _ = TestWindow.new(id: 20, parent: workspace.zoneContainers["left"].orDie())
+        let focusedWindow = TestWindow.new(id: 21, parent: center)
+        assertTrue(focusedWindow.focusWindow())
+
+        assertSucc([AeroObj.workspace(workspace)].format([
+            .interVar(.formatVar(.workspace(.zone))),
+            .literal(" "),
+            .interVar(.formatVar(.workspace(.zoneLayout))),
+            .literal(" "),
+            .interVar(.formatVar(.workspace(.zoneWindowCount))),
+        ]), ["center h_tiles 1"])
+
+        let emptyWorkspace = Workspace.get(byName: "empty")
+        assertSucc([AeroObj.workspace(emptyWorkspace)].format([
+            .interVar(.formatVar(.workspace(.zone))),
+            .literal(" "),
+            .interVar(.formatVar(.workspace(.zoneLayout))),
+            .literal(" "),
+            .interVar(.formatVar(.workspace(.zoneWindowCount))),
+        ]), ["NULL-ZONE NULL-ZONE-LAYOUT 0"])
+
+        assertSucc([
+            AeroObj.window(.forTest(window: focusedWindow, title: "focused")),
+            AeroObj.window(.forTest(window: TestWindow.new(id: 22, parent: emptyWorkspace.rootTilingContainer), title: "plain")),
+        ].format([.interVar(.formatVar(.window(.windowZone)))]), ["center", "NULL-ZONE"])
+    }
+
+    func testJsonFormatIncludesWindowZone() async throws {
+        let workspace = Workspace.get(byName: name)
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+
+        _ = TestWindow.new(id: 1, parent: workspace.zoneContainers["left"].orDie())
+        let centerWindow = TestWindow.new(id: 2, parent: workspace.zoneContainers["center"].orDie())
+        assertTrue(centerWindow.focusWindow())
+
+        let args = parseCmdArgs(["list-windows", "--all", "--format", "%{window-id} %{window-zone}", "--json"].slice).cmdOrDie as! ListWindowsCmdArgs
+        let result = try await ListWindowsCommand(args: args).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode.rawValue, 0)
+        assertEquals(result.stdout, ["""
+[
+  {
+    "window-id" : 1,
+    "window-zone" : "left"
+  },
+  {
+    "window-id" : 2,
+    "window-zone" : "center"
+  }
+]
+"""])
+        assertEquals(result.stderr, [])
     }
 
     func testRunFocusedNoWindow() async {

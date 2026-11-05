@@ -1,0 +1,51 @@
+= aerospace-presentation-mode(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-presentation-mode
+// tag::purpose[]
+:manpurpose: Toggle a temporary 16:9-centered presentation layout on the focused ultrawide workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace presentation-mode [-h|--help] on
+aerospace presentation-mode [-h|--help] off
+aerospace presentation-mode [-h|--help] toggle
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+`presentation-mode on` snapshots the focused workspace's current zone layout, then replaces it with a temporary three-zone presentation layout:
+
+- `left` stack
+- `center` tiles
+- `right` stack
+
+The center zone is sized as a full-height 16:9 region derived from the current monitor height. On a 5120×1440 monitor, this yields a 2560 px center zone and 1280 px side zones.
+
+The currently focused tiling window becomes the main shared window in `center`. Other tiling windows are redistributed into the side stacks. Persistent zone memory is intentionally not updated while presentation mode is active.
+
+`presentation-mode off` restores the previously active zone definitions, active preset name, and per-zone window ordering for that workspace.
+
+Forced zone rebuilds such as config reloads keep presentation mode active instead of silently reverting to the configured preset.
+
+If the ultrawide monitor is disconnected while presentation mode is active, the temporary presentation state is dropped automatically instead of being carried onto a non-zoned workspace, and persistent zone memory is left unchanged.
+
+`toggle` switches between the two states.
+
+The command only makes sense on workspaces where zones are currently active.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

@@ -1,0 +1,47 @@
+= aerospace-zone-memory(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-zone-memory
+// tag::purpose[]
+:manpurpose: Inspect or clear persisted zone-memory entries
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace zone-memory [-h|--help] list [--count] [--json]
+aerospace zone-memory [-h|--help] clear (--app-id <app-bundle-id>|--all)
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+Zone memory stores app-bundle-ID to zone assignments per monitor profile. It is used as a fallback placement rule after explicit `[zones.app-routing]` defaults. Manual moves such as `move-node-to-zone` still update zone memory, but explicit app-routing rules continue to win whenever they match.
+
+`list` returns the persisted entries as JSON objects with:
+
+- `profile-key`
+- `app-id`
+- `zone-id`
+
+`clear` removes entries from the full persisted store:
+
+- `--app-id <app-bundle-id>` removes that app's remembered zone assignments across all monitor profiles
+- `--all` removes every stored entry
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+--count:: Print only the number of persisted entries. Only valid with `list`.
+--json:: Print JSON output. Accepted for symmetry with other list commands; `list` already emits JSON.
+--app-id <app-bundle-id>:: Remove persisted entries for the given app bundle ID. Only valid with `clear`.
+--all:: Remove all persisted entries. Only valid with `clear`.
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

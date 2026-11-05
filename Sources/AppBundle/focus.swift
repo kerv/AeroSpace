@@ -63,15 +63,26 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
 @MainActor func setFocus(to newFocus: LiveFocus) -> Bool {
     if _focus == newFocus.frozen { return true }
     let oldFocus = focus
+    var resolvedFocus = newFocus
     // Normalize mruWindow when focus away from a workspace
     if oldFocus.workspace != newFocus.workspace {
         oldFocus.windowOrNil?.markAsMostRecentChild()
+        // Move sticky floating windows from the old workspace to the new workspace
+        for window in oldFocus.workspace.floatingWindows where StickyMemory.shared.isRemembered(windowId: window.windowId) {
+            window.bindAsFloatingWindow(to: newFocus.workspace)
+        }
+        // If the previously focused window was sticky, carry it as the focus into the new workspace
+        if let oldWindow = oldFocus.windowOrNil,
+           StickyMemory.shared.isRemembered(windowId: oldWindow.windowId)
+        {
+            resolvedFocus = LiveFocus(windowOrNil: oldWindow, workspace: newFocus.workspace)
+        }
     }
 
-    _focus = newFocus.frozen
-    let status = newFocus.workspace.workspaceMonitor.setActiveWorkspace(newFocus.workspace)
+    _focus = resolvedFocus.frozen
+    let status = resolvedFocus.workspace.workspaceMonitor.setActiveWorkspace(resolvedFocus.workspace)
 
-    newFocus.windowOrNil?.markAsMostRecentChild()
+    resolvedFocus.windowOrNil?.markAsMostRecentChild()
     return status
 }
 extension Window {
@@ -115,6 +126,7 @@ extension Workspace {
 // Used by focus-back-and-forth
 @MainActor private var _prevFocus: FrozenFocus? = nil
 @MainActor var prevFocus: LiveFocus? { _prevFocus?.live.takeIf { $0 != focus } }
+@MainActor private var _lastBroadcastZoneFocus: (workspaceName: String, zoneName: String?)? = nil
 
 @MainActor private var onFocusChangedRecursionGuard = false
 // Should be called in refreshSession
@@ -163,11 +175,48 @@ extension Workspace {
 }
 
 @MainActor func onFocusChanged(_ env: CmdEnv, _ io: CmdIo, _ focus: LiveFocus) async -> Int32ExitCode {
+ // Immediately re-sync borders so active/inactive colors update without waiting for a layout pass.
+    Task { await BorderController.shared.sync() }
+
+    let winDesc = focus.windowOrNil.map { "\($0.windowId) \($0.app.rawAppBundleId ?? "?")" } ?? "nil"
+    aeroLog("focus → \(winDesc) ws:\(focus.workspace.name)")
+
+    // Update MRU zone history when a window in a zone gains focus (mouse, hotkey, or any path).
+    if let window = focus.windowOrNil,
+       let zoneContainer = window.parents.first(where: { ($0 as? TilingContainer)?.isZoneContainer == true }) as? TilingContainer,
+       let zoneName = focus.workspace.zoneContainers.first(where: { $0.value === zoneContainer })?.key
+    {
+        focus.workspace.mruZones.removeAll { $0 == zoneName }
+        focus.workspace.mruZones.insert(zoneName, at: 0)
+        if focus.workspace.mruZones.count > 10 { focus.workspace.mruZones.removeLast() }
+    }
+
+    let focusedZoneName: String? = focus.windowOrNil.flatMap { window in
+        zoneName(for: window, in: focus.workspace)
+    }
+    if let window = focus.windowOrNil,
+       let zone = focus.workspace.zoneContaining(window)?.container,
+       zone.layout == .stack,
+       focus.workspace.zoneLayoutProfileKey == MonitorProfile([focus.workspace.workspaceMonitor]).key {
+        focus.workspace.rememberDockedZoneLayout()
+    }
     broadcastEvent(.focusChanged(
         windowId: focus.windowOrNil?.windowId,
         workspace: focus.workspace.name,
+        appName: focus.windowOrNil?.app.name,
+        zoneName: focusedZoneName,
     ))
+    broadcastZoneFocusedIfNeeded(workspace: focus.workspace, zoneName: focusedZoneName)
     return await config.onFocusChanged.run(env.withFocus(focus), io)
+}
+
+@MainActor
+func broadcastZoneFocusedIfNeeded(workspace: Workspace, zoneName: String?) {
+    let next = (workspace.name, zoneName)
+    guard _lastBroadcastZoneFocus?.workspaceName != next.0 || _lastBroadcastZoneFocus?.zoneName != next.1 else { return }
+    _lastBroadcastZoneFocus = next
+    guard let zoneName else { return }
+    broadcastEvent(.zoneFocused(workspace: workspace.name, zoneName: zoneName))
 }
 
 @MainActor private func onWorkspaceChanged(_ oldWorkspace: String, _ newWorkspace: String, _ focus: LiveFocus) {

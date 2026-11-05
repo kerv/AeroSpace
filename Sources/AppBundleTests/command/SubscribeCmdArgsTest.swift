@@ -4,10 +4,10 @@ import XCTest
 
 final class SubscribeCmdArgsTest: XCTestCase {
     func testParseValidEvents() {
-        let result = parseSubscribeCmdArgs(["focus-changed", "mode-changed"].slice)
+        let result = parseSubscribeCmdArgs(["focus-changed", "window-routed", "zone-focused", "zone-preset-changed", "zone-layout-changed", "zone-window-count-changed"].slice)
         switch result {
             case .cmd(let args):
-                assertEquals(args.events, Set([.focusChanged, .modeChanged]))
+                assertEquals(args.events, Set([.focusChanged, .windowRouted, .zoneFocused, .zonePresetChanged, .zoneLayoutChanged, .zoneWindowCountChanged]))
             case .help, .failure:
                 XCTFail("Expected success")
         }
@@ -31,7 +31,7 @@ final class SubscribeCmdArgsTest: XCTestCase {
             case .failure(let err):
                 let expectedMsg = """
                     ERROR: Can't parse 'unknown-event'.
-                           Possible values: (focus-changed|focused-monitor-changed|focused-workspace-changed|mode-changed|window-detected|binding-triggered)
+                           Possible values: (focus-changed|focused-monitor-changed|focused-workspace-changed|mode-changed|window-detected|window-routed|binding-triggered|monitor-changed|zone-focused|zone-preset-changed|zone-layout-changed|zone-window-count-changed)
                     """
                 assertEquals(err, .init(expectedMsg, 2))
         }

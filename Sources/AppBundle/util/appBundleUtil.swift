@@ -26,6 +26,9 @@ func initTerminationHandler() {
 private struct AppServerTerminationHandler: TerminationHandler {
     @MainActor
     func beforeTermination() {
+        // Capture the current arrangement before windows are made visible for quit.
+        for workspace in Workspace.all { workspace.rememberDockedZoneLayout() }
+        for window in MacWindow.allWindowsMap.values { rememberWindowPlacement(window) }
         // Make all windows fullscreen before Quit
         for window in MacWindow.allWindowsMap.values {
             // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)

@@ -15,6 +15,7 @@ aerospace focus [-h|--help] [--ignore-floating] [--wrap-around]
                 (left|down|up|right)
 aerospace focus [-h|--help] [--ignore-floating] [--wrap-around]
                 [--boundaries <boundary>] [--boundaries-action <action>]
+                [--scope <scope>]
                 (dfs-next|dfs-prev)
 aerospace focus [-h|--help] --window-id <window-id>
 aerospace focus [-h|--help] --dfs-index <dfs-index>
@@ -61,6 +62,12 @@ Focus the window with specified `<window-id>`
 --dfs-index <dfs-index>::
 Focus window by its index, based on a depth-first search (DFS) of the window within the workspace tree.
 Index is 0-based.
+
+--scope <scope>::
+Limit the DFS window list to a specific scope. Only valid with `(dfs-next|dfs-prev)`. +
+`<scope>` possible values: `(workspace|current-container)`. +
+`workspace` traverses all windows in the workspace (the default). +
+`current-container` traverses only windows within the immediate parent container of the focused window — useful for cycling within a single accordion stack or zone.
 
 --ignore-floating::
 Don't perceive floating windows as part of the tree.

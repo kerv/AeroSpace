@@ -12,6 +12,12 @@ struct FlattenWorkspaceTreeCommand: Command {
         for window in windows {
             window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         }
+        for zone in workspace.zoneContainers.values {
+            zone.unbindFromParent()
+        }
+        workspace.zoneContainers = [:]
+        workspace.activeZoneProfile = nil
+        workspace.savedRootOrientation = nil
         return .succ
     }
 }

@@ -48,6 +48,8 @@ mode-changed:: Fired when the binding mode changes. Includes `mode`.
 
 window-detected:: Fired when a new window is detected. Includes `windowId`, `workspace`, `appBundleId`, `appName`.
 
+window-routed:: Fired when the runtime placement pipeline routes a window into a zone. Includes `windowId`, `workspace`, `appBundleId`, `zoneName`, `source`.
+
 binding-triggered:: Fired when a keyboard binding is triggered. Includes `binding`, `mode`.
 
 // =========================================================== Output Format

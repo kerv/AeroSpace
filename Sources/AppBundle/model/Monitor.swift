@@ -94,8 +94,11 @@ private let testMonitor = MonitorImpl(
     isMain: true,
 )
 
+// Injected only by monitor-topology tests; production always uses NSScreen.
+nonisolated(unsafe) var testMonitorsOverride: [any Monitor]? = nil
+
 var mainMonitor: Monitor {
-    if isUnitTest { return testMonitor }
+    if isUnitTest { return testMonitorsOverride?.first(where: \.isMain) ?? testMonitorsOverride?.first ?? testMonitor }
     let screens = NSScreen.screens
     // Fallback: If main screen can't be found (e.g., during display reconfiguration),
     // return screens.first or testMonitor to avoid crash
@@ -106,7 +109,7 @@ var mainMonitor: Monitor {
 
 var monitors: [Monitor] {
     isUnitTest
-        ? [testMonitor]
+        ? (testMonitorsOverride ?? [testMonitor])
         : NSScreen.screens.enumerated().map { $0.element.toMonitor(monitorAppKitNsScreenScreensId: $0.offset + 1) }
 }
 
