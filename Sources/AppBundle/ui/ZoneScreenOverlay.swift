@@ -192,22 +192,24 @@ private struct ZoneScreenOverlayView: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(item.isActive ? Color.accentColor : Color.white.opacity(0.8), lineWidth: item.isActive ? 5 : 3)
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.id.uppercased() + (item.isFloating && item.isActive ? "  ·  FLOATING" : item.isActive ? "  ·  ACTIVE" : ""))
-                    .font(.system(size: 16, weight: .bold))
-                Text("Window shortcuts · \(modeName) mode")
-                    .font(.system(size: 11, weight: .medium))
+                HStack(spacing: 10) {
+                    Text(item.id.uppercased() + (item.isFloating && item.isActive ? "  ·  FLOATING" : item.isActive ? "  ·  ACTIVE" : ""))
+                        .font(.system(size: 14, weight: .bold))
+                    Text("\(modeName) mode  ·  Release ⌥ to hide")
+                        .font(.system(size: 11))
+                }
                 if hints.isEmpty {
                     Text("No window shortcuts configured in this mode")
                         .font(.system(size: 11))
                 } else {
-                    VStack(alignment: .leading, spacing: 2) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 220, maximum: 300), alignment: .leading)],
+                              alignment: .leading, spacing: 3) {
                         ForEach(hints, id: \.self) { hint in
                             Text(hint).font(.system(size: 11)).lineLimit(1)
                         }
                     }
+                    .frame(maxWidth: min(920, max(220, item.rect.width - 44)), alignment: .leading)
                 }
-                Text("Release ⌥ to hide")
-                    .font(.system(size: 11))
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 12)
