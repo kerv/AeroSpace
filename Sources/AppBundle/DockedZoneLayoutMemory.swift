@@ -47,6 +47,27 @@ final class DockedZoneLayoutMemory {
 }
 
 extension Workspace {
+    /// During startup zones can be activated before AX has discovered the windows. Restore
+    /// a late-arriving window from this workspace's snapshot by its still-live macOS ID.
+    @MainActor func restoreDockedWindowById(_ window: Window) -> Bool {
+        guard !window.isFloating, window.nodeWorkspace === self,
+              let appId = window.app.rawAppBundleId, let profile = zoneLayoutProfileKey,
+              let snapshot = DockedZoneLayoutMemory.shared.snapshot(workspace: name, profile: profile) else { return false }
+        let matches = snapshot.zones.flatMap { savedZone in
+            savedZone.windows.enumerated().compactMap { index, saved -> (DockedZoneLayoutMemory.SavedZone, Int, DockedZoneLayoutMemory.SavedWindow)? in
+                saved.id == window.windowId && saved.appId == appId ? (savedZone, index, saved) : nil
+            }
+        }
+        guard matches.count == 1, let (savedZone, index, saved) = matches.first,
+              let zone = zoneContainers[savedZone.id] else { return false }
+        var insertionIndex = min(index, zone.children.count)
+        if window.parent === zone, let old = window.ownIndex, old < insertionIndex { insertionIndex += 1 }
+        let weight = saved.weight.flatMap { $0.isFinite && $0 > 0 ? CGFloat($0) : nil } ?? WEIGHT_AUTO
+        window.bind(to: zone, adaptiveWeight: weight, index: min(insertionIndex, zone.children.count))
+        if savedZone.activeWindowId == window.windowId { window.markAsMostRecentChild() }
+        return true
+    }
+
     @MainActor func rememberDockedZoneLayout() {
         guard let profile = zoneLayoutProfileKey, !zoneContainers.isEmpty,
               presentationModeSnapshot == nil, rootTilingContainer.orientation == .h,

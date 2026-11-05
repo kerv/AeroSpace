@@ -63,6 +63,29 @@ import XCTest
         XCTAssertNil(loaded.snapshot(workspace: "2", profile: "dock"))
         XCTAssertNil(loaded.snapshot(workspace: "1", profile: "laptop"))
     }
+
+    func testLateDiscoveredWindowRestoresItsZoneDespiteChangedTitle() {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let window = TestWindow.new(id: 7863, parent: workspace.zoneContainers["center"]!)
+        window.placementIdentityTitle = "Old browser tab"
+        workspace.rememberDockedZoneLayout()
+        window.bind(to: workspace.zoneContainers["left"]!, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        window.placementIdentityTitle = "New browser tab"
+        XCTAssertTrue(workspace.restoreDockedWindowById(window))
+        XCTAssertEqual(workspace.zoneContaining(window)?.name, "center")
+    }
+
+    func testLateDiscoveryDoesNotMoveUnknownOrFloatingWindows() {
+        let workspace = focus.workspace
+        workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
+        let saved = TestWindow.new(id: 7863, parent: workspace.zoneContainers["center"]!)
+        workspace.rememberDockedZoneLayout()
+        let unknown = TestWindow.new(id: 9999, parent: workspace.zoneContainers["left"]!)
+        XCTAssertFalse(workspace.restoreDockedWindowById(unknown))
+        saved.bindAsFloatingWindow(to: workspace)
+        XCTAssertFalse(workspace.restoreDockedWindowById(saved))
+    }
     func testLayoutAndResizeCommandsPersistWithoutUndocking() async {
         let workspace = focus.workspace
         workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)

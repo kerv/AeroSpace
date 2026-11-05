@@ -61,7 +61,8 @@ final class MacWindow: Window {
             await tryOnWindowDetected(window)
         }
         // Restore only tiling windows; floating and scratchpad rules retain their own behavior.
-        if !window.isFloating, let workspace = window.nodeWorkspace,
+        let restoredDockedWindow = isStartup && (window.nodeWorkspace?.restoreDockedWindowById(window) ?? false)
+        if !restoredDockedWindow, !window.isFloating, let workspace = window.nodeWorkspace,
            let entry = matchingPlacementEntry(for: window, profile: MonitorProfile(monitors).key)
         {
             // Keep the matched identity stable when a unique app fallback matched a changed title.
