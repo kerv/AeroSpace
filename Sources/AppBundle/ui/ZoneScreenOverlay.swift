@@ -9,24 +9,82 @@ struct ZoneOverlayItem {
     let isFloating: Bool
 }
 
-/// Use the parsed bindings of the active mode, preserving the notation from the user's TOML.
-/// Show window-management commands only; arbitrary shell commands can contain private data.
+/// Summarize common actions from the active mode without exposing shell arguments.
 func zoneOverlayBindingHints(_ bindings: [String: HotkeyBinding]) -> [String] {
-    let relevant: Set<String> = [
-        "focus", "focus-zone", "focus-monitor", "focus-back-and-forth", "move", "move-node-to-zone",
-        "move-floating-to-zone", "move-node-to-monitor", "move-node-to-workspace", "move-workspace-to-monitor",
-        "workspace", "workspace-back-and-forth", "layout", "resize", "fullscreen", "macos-native-fullscreen",
-        "macos-native-minimize", "split", "join-with", "balance-sizes", "swap", "zone-focus-mode",
-        "show-zone-picker", "overview-zones", "show-workspace-menu",
-    ]
-    return bindings.values.sorted { $0.descriptionWithKeyNotation < $1.descriptionWithKeyNotation }.compactMap { binding in
-        let commands = binding.commands.flatten()
-        let matching = commands.filter { relevant.contains($0.info.kind.rawValue) }
-        guard !matching.isEmpty else { return nil }
-        let descriptions = matching.map { $0.args.description }.joined(separator: "; ")
-        let prefix = commands.count > 1 ? "includes " : ""
-        return "\(binding.descriptionWithKeyNotation): \(prefix)\(descriptions)"
+    let order = ["Focus windows", "Move windows", "Focus zones", "Move to zones", "Layout", "Float / tile", "Resize zones", "Cycle windows"]
+    var actions: [String: [String]] = [:]
+    for binding in bindings.values {
+        for command in binding.commands.flatten() {
+            let action: String?
+            switch command {
+                case let focus as FocusCommand:
+                    switch focus.args.target {
+                        case .direction: action = "Focus windows"
+                        case .dfsRelative: action = "Cycle windows"
+                        default: action = nil
+                    }
+                case is MoveCommand: action = "Move windows"
+                case is FocusZoneCommand: action = "Focus zones"
+                case is MoveNodeToZoneCommand: action = "Move to zones"
+                case let layout as LayoutCommand:
+                    action = layout.args.toggleBetween.val.contains(.floating) ? "Float / tile" : "Layout"
+                case let resize as ResizeCommand: action = resize.args.zone ? "Resize zones" : nil
+                default: action = nil
+            }
+            if let action { actions[action, default: []].append(binding.descriptionWithKeyNotation) }
+        }
     }
+    return order.compactMap { action in
+        guard let keys = actions[action], !keys.isEmpty else { return nil }
+        return "\(action): \(compactOverlayKeys(Array(Set(keys)).sorted()))"
+    }
+}
+
+private func compactOverlayKeys(_ bindings: [String]) -> String {
+    var groups: [String: [String]] = [:]
+    for binding in bindings {
+        let parts = binding.split(separator: "-").map(String.init)
+        guard let key = parts.last else { continue }
+        let modifiers = parts.dropLast().map { modifier in
+            switch modifier {
+                case "alt": "⌥"
+                case "ctrl": "⌃"
+                case "shift": "⇧"
+                case "cmd": "⌘"
+                case "hyper": "⌃⌥⇧⌘"
+                case "meh": "⌃⌥⇧"
+                default: modifier + "-"
+            }
+        }.joined()
+        let displayKey: String = switch key {
+            case "left": "←"
+            case "right": "→"
+            case "up": "↑"
+            case "down": "↓"
+            case "slash": "/"
+            case "minus": "−"
+            case "equal": "="
+            case "tab": "Tab"
+            default: key.uppercased()
+        }
+        let family: String = switch key {
+            case "left", "right", "up", "down": "arrows"
+            case let value where value.count == 1 && value.first?.isLetter == true: "letters"
+            case let value where value.count == 1 && value.first?.isNumber == true: "numbers"
+            default: "other"
+        }
+        groups[modifiers + "|" + family, default: []].append(displayKey)
+    }
+    let formatted = groups.keys.sorted().map { group in
+        let modifier = String(group.split(separator: "|", omittingEmptySubsequences: false).first ?? "")
+        let keys = groups[group] ?? []
+        let directions = ["←", "↓", "↑", "→"]
+        let ordered = keys.allSatisfy { directions.contains($0) }
+            ? directions.filter { keys.contains($0) }
+            : keys
+        return modifier + ordered.joined(separator: "/")
+    }
+    return formatted.prefix(2).joined(separator: " · ") + (formatted.count > 2 ? " …" : "")
 }
 
 @MainActor
@@ -142,9 +200,9 @@ private struct ZoneScreenOverlayView: View {
                     Text("No window shortcuts configured in this mode")
                         .font(.system(size: 11))
                 } else {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: item.rect.width >= 650 ? 2 : 1), alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: 2) {
                         ForEach(hints, id: \.self) { hint in
-                            Text(hint).font(.system(size: 10, design: .monospaced)).lineLimit(2)
+                            Text(hint).font(.system(size: 11)).lineLimit(1)
                         }
                     }
                 }

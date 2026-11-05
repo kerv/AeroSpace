@@ -36,11 +36,22 @@ import XCTest
         let unrelated = HotkeyBinding(.option, .q, parseCommand("echo -- secret").cmdOrDie,
                                       descriptionWithKeyNotation: "alt-q")
         let hints = zoneOverlayBindingHints(["a": vim, "b": custom, "c": shell, "d": unrelated])
-        XCTAssertTrue(hints.contains("alt-h: focus left"))
-        XCTAssertTrue(hints.contains("cmd-shift-j: move-node-to-zone center"))
-        XCTAssertTrue(hints.contains("alt-t: includes layout floating tiling"))
+        XCTAssertTrue(hints.contains("Focus windows: ⌥H"))
+        XCTAssertTrue(hints.contains("Move to zones: ⌘⇧J"))
+        XCTAssertTrue(hints.contains("Float / tile: ⌥T"))
         XCTAssertFalse(hints.joined().contains("secret"))
-        XCTAssertFalse(hints.joined().contains("alt-q"))
-        XCTAssertFalse(hints.joined().contains("alt-ctrl-1"))
+        XCTAssertFalse(hints.joined().contains("⌥Q"))
+        XCTAssertFalse(hints.joined().contains("⌥⌃1"))
+    }
+
+    func testHintsGroupVimAndArrowAlternatives() {
+        let bindings = [
+            HotkeyBinding(.option, .h, parseCommand("focus left").cmdOrDie, descriptionWithKeyNotation: "alt-h"),
+            HotkeyBinding(.option, .j, parseCommand("focus down").cmdOrDie, descriptionWithKeyNotation: "alt-j"),
+            HotkeyBinding(.option, .leftArrow, parseCommand("focus left").cmdOrDie, descriptionWithKeyNotation: "alt-left"),
+            HotkeyBinding(.option, .downArrow, parseCommand("focus down").cmdOrDie, descriptionWithKeyNotation: "alt-down"),
+        ]
+        let hints = zoneOverlayBindingHints(Dictionary(uniqueKeysWithValues: bindings.map { ($0.descriptionWithKeyNotation, $0) }))
+        XCTAssertEqual(hints, ["Focus windows: ⌥←/↓ · ⌥H/J"])
     }
 }

@@ -8,7 +8,7 @@ By default, a display with a visible width-to-height ratio greater than 2.1 uses
 
 The display-specific icon overlay appears on screens with a width-to-height ratio of at least 2.3 and more than one active zone. It shows clickable windows by zone and a separate floating-window group when needed. It overlays the macOS menu bar rather than registering a normal status item; in a crowded menu bar it may cover other items.
 
-Holding Option displays zone borders and shortcut help. The overlay reads the **active mode's actual parsed bindings** from the loaded configuration. It shows window-management commands, including Vim keys or custom modifiers, without inventing bindings. Shell commands and other unrelated bindings are omitted; for a binding containing multiple commands, `includes` identifies the window-management parts without displaying arbitrary shell arguments. The activation gesture itself is currently fixed to holding Option; it is not controlled by a keybinding in TOML. On release the overlay disappears.
+Holding Option displays zone borders and compact shortcut help. The overlay reads the **active mode's actual parsed bindings** from the loaded configuration and groups common window and zone actions, including Vim keys or custom modifiers. It shows up to two groups of alternate keys per action; an ellipsis indicates more. Shell arguments and unrelated bindings are omitted. The activation gesture itself is currently fixed to holding Option; it is not controlled by a keybinding in TOML. On release the overlay disappears.
 
 ## Optional shortcuts
 
