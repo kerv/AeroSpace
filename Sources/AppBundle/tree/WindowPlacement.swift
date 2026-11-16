@@ -85,9 +85,8 @@ func resolveNewTilingWindowPlacement(
 func applyRuntimePlacementDefaults(_ window: Window) {
     guard let workspace = window.nodeWorkspace else { return }
 
-    if !window.isFloating,
-       FloatingMemory.shared.isRemembered(windowId: window.windowId)
-    {
+    let appWindowCount = (window as? MacWindow)?.macApp.detectedWindowCount ?? 1
+    if FloatingMemory.shared.restore(window, appWindowCount: appWindowCount), !window.isFloating {
         window.bindAsFloatingWindow(to: workspace)
     }
 

@@ -81,7 +81,11 @@ struct FrozenWorkspace: Sendable {
         workspace.zoneContainers = [:]
         restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST, workspace: workspace)
         for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
-            try await window.relayoutWindow(on: workspace, .cancellable, forceTile: true)
+            if FloatingMemory.shared.isRemembered(windowId: window.windowId) {
+                window.bindAsFloatingWindow(to: workspace)
+            } else {
+                try await window.relayoutWindow(on: workspace, .cancellable, forceTile: true)
+            }
         }
     }
 
@@ -115,7 +119,11 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
             case .window(let w):
                 // Stop the loop if can't find the window, because otherwise all the subsequent windows will have incorrect index
                 guard let window = MacWindow.get(byId: w.id) else { return false }
-                window.bind(to: container, adaptiveWeight: w.weight, index: index)
+                if FloatingMemory.shared.isRemembered(windowId: window.windowId), let workspace {
+                    window.bindAsFloatingWindow(to: workspace)
+                } else {
+                    window.bind(to: container, adaptiveWeight: w.weight, index: index)
+                }
             case .container(let c):
                 // There is no reason to continue
                 if !restoreTreeRecursive(frozenContainer: c, parent: container, index: index) { return false }

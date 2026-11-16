@@ -37,7 +37,7 @@ alt-ctrl-equal = 'resize --zone width +50'
 
 If your existing config uses any of these keys, keep your current binding or choose another key; TOML cannot contain the same binding twice in one mode. The names `left`, `center`, and `right` above must match your own configured zone IDs.
 
-`layout --zone` applies to the current zone rather than an inner split. With no zones, it targets the workspace root. `--cycle` advances through the supplied descriptions in order; without it, AeroSpace retains the existing first-nonmatching toggle behavior. `move-node-to-zone` turns a floating window back into a tile in the chosen zone; `move-floating-to-zone` moves it while keeping it floating. `layout stack tiles` toggles the focused container, which can be a nested container rather than the whole zone.
+`layout --zone` applies to the current zone rather than an inner split. With no zones, it targets the workspace root. `--cycle` advances through the supplied descriptions in order; without it, AeroSpace retains the existing first-nonmatching toggle behavior. `move-node-to-zone` moves a floating window while keeping it floating; use `layout floating tiling` to return it to tiling. `layout stack tiles` toggles the focused container, which can be a nested container rather than the whole zone.
 
 Check and reload after editing:
 
@@ -50,7 +50,7 @@ Review any warnings before reloading. Zone definitions and window arrangements c
 
 ## Placement and floating windows
 
-Zone layout snapshots and window placement memories are saved under `~/Library/Application Support/AeroSpace/`. Floating positions and sizes are remembered by app, window title, and display profile when the floating window is manipulated or returned to tiling. When a matching window is floated again, its saved frame is restored if it fits in the chosen zone. Otherwise it is centered with a smaller default size. Matching deliberately avoids guessing when multiple windows have indistinguishable identities. A new window does not automatically become floating merely because an earlier instance had a saved floating frame.
+Zone layout snapshots and window placement memories are saved under `~/Library/Application Support/AeroSpace/`. An explicit floating choice is remembered across AeroSpace and app restarts using the window ID while available, then app and window identity. Floating positions and sizes are remembered by app, window title, and display profile when the floating window is manipulated or returned to tiling. Matching avoids guessing when several saved windows are indistinguishable; in that case a reopened window may need to be floated again. Use the floating toggle to deliberately return a window to tiling.
 
 These memories are local to the Mac and are not stored in the TOML or the repository. Keep backups if the arrangements are important. A freshly rebuilt, ad-hoc-signed app can require Accessibility permission to be re-enabled in macOS System Settings.
 

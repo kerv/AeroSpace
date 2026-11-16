@@ -26,7 +26,12 @@ struct MoveFloatingToZoneCommand: Command {
             default:
                 return .fail(io.err("move-floating-to-zone: focused window is not floating or tiling"))
         }
-        let zoneName = args.zone.val
+        return try await moveFloatingWindow(window, in: workspace, to: args.zone.val, io)
+    }
+}
+
+@MainActor
+func moveFloatingWindow(_ window: Window, in workspace: Workspace, to zoneName: String, _ io: CmdIo) async throws -> BinaryExitCode {
         guard let toZone = workspace.zoneContainers[zoneName] else {
             return .fail(io.err("move-floating-to-zone: zones not active on this workspace"))
         }
@@ -58,5 +63,4 @@ struct MoveFloatingToZoneCommand: Command {
         ZoneMemory.shared.rememberZone(zoneName, for: window, profile: MonitorProfile([workspace.workspaceMonitor]))
         StickyMemory.shared.forget(windowId: window.windowId)
         return .succ
-    }
 }

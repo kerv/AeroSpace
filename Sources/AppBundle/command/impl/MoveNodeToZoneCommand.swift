@@ -17,14 +17,11 @@ struct MoveNodeToZoneCommand: Command {
         guard let zone = workspace.zoneContainers[zoneName] else {
             return .fail(io.err("move-node-to-zone: zones not active on this workspace"))
         }
-        let binding = workspace.bindingDataForNewWindow(inZone: zoneName, zone: zone)
-        let wasFloating = window.isFloating
-        if wasFloating {
-            await rememberFloatingGeometry(window)
-            window.lastFloatingSize = (try? await window.getAxSize(.nonCancellable)) ?? window.lastFloatingSize
+        if window.isFloating {
+            return try await moveFloatingWindow(window, in: workspace, to: zoneName, io)
         }
+        let binding = workspace.bindingDataForNewWindow(inZone: zoneName, zone: zone)
         window.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
-        if wasFloating { FloatingMemory.shared.forget(windowId: window.windowId) }
         binding.preferredMostRecentChildAfterBind?.markAsMostRecentChild()
         ZoneMemory.shared.rememberZone(zoneName, for: window, profile: MonitorProfile([workspace.workspaceMonitor]))
         rememberWindowPlacement(window)

@@ -68,6 +68,8 @@ MRU zone state is in-memory only and resets on AeroSpace restart.
 
 Moves the focused window into the named zone container and saves that assignment to persistent zone memory (see below). The window is focused after the move.
 
+If the window is floating, it remains floating and is repositioned over the requested zone. Use `layout floating tiling` to return it to tiling.
+
 Pass `--no-focus` to move the window without stealing focus. This is the recommended form when calling `move-node-to-zone` from an `[[on-window-detected]]` callback so that opening a new app does not involuntarily pull focus away from your current window:
 
 ```toml

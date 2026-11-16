@@ -15,6 +15,7 @@ let projectRoot: URL = {
 
 @MainActor
 func setUpWorkspacesForTests() {
+    FloatingMemory.shared = FloatingMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-floating-state-test-\(UUID().uuidString).json"))
     FloatingGeometryMemory.shared = FloatingGeometryMemory(url: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-float-test-\(UUID().uuidString).json"))
     DockedMonitorWorkspaceMemory.shared = DockedMonitorWorkspaceMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-dock-workspace-test-\(UUID().uuidString).json"))
     DockedZoneLayoutMemory.shared = DockedZoneLayoutMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent("aerospace-dock-test-\(UUID().uuidString).json"))

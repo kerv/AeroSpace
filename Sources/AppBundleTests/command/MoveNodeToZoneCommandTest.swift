@@ -29,21 +29,24 @@ final class MoveNodeToZoneCommandTest: XCTestCase {
         XCTAssertTrue(window.parent === left, "Window should be in left zone")
     }
 
-    func testMovingFloatingWindowIntoZoneClearsFloatingMemory() async throws {
+    func testMovingFloatingWindowToZoneKeepsItFloating() async throws {
         let previousMemory = FloatingMemory.shared
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         FloatingMemory.shared = FloatingMemory(storageURL: url)
         defer { FloatingMemory.shared = previousMemory; try? FileManager.default.removeItem(at: url) }
         let workspace = Workspace.get(byName: name)
         workspace.ensureZoneContainers(for: FakeMonitor.ultrawide)
-        let window = TestWindow.new(id: 4242, parent: workspace.floatingWindowsContainer)
+        let window = TestWindow.new(id: 4242, parent: workspace.floatingWindowsContainer,
+                                    rect: Rect(topLeftX: 1600, topLeftY: 100, width: 500, height: 400))
         FloatingMemory.shared.remember(windowId: window.windowId)
         XCTAssertTrue(window.focusWindow())
 
         let result = await MoveNodeToZoneCommand(args: MoveNodeToZoneCmdArgs(rawArgs: [], "left")).run(.defaultEnv, .emptyStdin)
         XCTAssertEqual(result.exitCode.rawValue, 0)
-        XCTAssertTrue(workspace.zoneContaining(window)?.name == "left")
-        XCTAssertFalse(FloatingMemory.shared.isRemembered(windowId: window.windowId))
+        XCTAssertTrue(window.isFloating)
+        XCTAssertTrue(FloatingMemory.shared.isRemembered(windowId: window.windowId))
+        let rect = try await window.getAxRect(.nonCancellable)
+        XCTAssertEqual(rect.flatMap { workspace.zoneForWindowRect($0) }, "left")
     }
 
     func testMoveToZone_noZones() async throws {

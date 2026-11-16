@@ -86,7 +86,7 @@ struct LayoutCommand: Command {
                         await rememberFloatingGeometry(window)
                         window.lastFloatingSize = (try? await window.getAxSize(.nonCancellable)) ?? window.lastFloatingSize
                         guard let workspace = container.nodeWorkspace else { return .fail(io.err(bugPrompt())) }
-                        FloatingMemory.shared.forget(windowId: window.windowId)
+                        FloatingMemory.shared.forget(window)
                         StickyMemory.shared.forget(windowId: window.windowId)
                         do {
                             try await window.relayoutWindow(on: workspace, .nonCancellable, forceTile: true)
@@ -105,7 +105,7 @@ struct LayoutCommand: Command {
                     ?? centeredFloatingFrame(in: zoneRect, previousSize: window.lastFloatingSize)
                 rememberWindowPlacement(window)
                 window.bindAsFloatingWindow(to: workspace)
-                FloatingMemory.shared.remember(windowId: window.windowId)
+                FloatingMemory.shared.remember(window)
                 StickyMemory.shared.forget(windowId: window.windowId)
                 window.setAxFrame(frame.origin, frame.size)
                 return .succ

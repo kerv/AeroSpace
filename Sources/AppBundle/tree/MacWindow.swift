@@ -49,6 +49,7 @@ final class MacWindow: Window {
         // Apply non-callback placement defaults (floating defaults, sticky, scratchpad) before
         // generic on-window-detected callbacks so declarative defaults establish the baseline.
         applyRuntimePlacementDefaults(window)
+        let keepFloating = FloatingMemory.shared.isRemembered(windowId: window.windowId)
 
         if isStartup, window.isFloating, FloatingMemory.shared.isRemembered(windowId: window.windowId),
            let workspace = window.nodeWorkspace,
@@ -59,6 +60,11 @@ final class MacWindow: Window {
         try await debugWindowsIfRecording(window, .cancellable)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
             await tryOnWindowDetected(window)
+        }
+        // Window-detected rules or a stale closed-window snapshot may have rebound it as a tile.
+        if keepFloating, !window.isFloating, window.parent is TilingContainer, let workspace = window.nodeWorkspace {
+            window.bindAsFloatingWindow(to: workspace)
+            FloatingMemory.shared.remember(window)
         }
         // Restore only tiling windows; floating and scratchpad rules retain their own behavior.
         let restoredDockedWindow = isStartup && (window.nodeWorkspace?.restoreDockedWindowById(window) ?? false)
@@ -120,7 +126,7 @@ final class MacWindow: Window {
         }
         aeroLog("window closed: \(windowId) \(macApp.rawAppBundleId ?? "?")")
         BorderController.shared.removeBorder(windowId: windowId)
-        FloatingMemory.shared.forget(windowId: windowId)
+        FloatingMemory.shared.forgetLiveId(windowId: windowId)
         StickyMemory.shared.forget(windowId: windowId)
         ScratchpadMemory.shared.forget(windowId: windowId)
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }

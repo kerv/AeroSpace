@@ -21,6 +21,8 @@ aerospace move-node-to-zone [-h|--help] (<zone-id>)
 
 Zones are active only when the workspace is displayed on an ultrawide monitor (aspect ratio > 2.1:1). If zones are not active, the command is a no-op and prints an error to stderr.
 
+If the window is floating, it remains floating and is moved over the requested zone. Use `layout floating tiling` to return it to the tiling tree.
+
 The command updates persistent zone memory for the window's app bundle ID. That remembered assignment is still treated as a fallback: if `[zones.app-routing]` also defines the app, the explicit app route takes precedence on future placements.
 
 // =========================================================== Options

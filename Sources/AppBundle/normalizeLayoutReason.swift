@@ -58,6 +58,10 @@ func exitMacOsNativeUnconventionalState(
     _ cm: CancellationMode,
 ) async throws {
     window.layoutReason = .standard
+    if FloatingMemory.shared.isRemembered(windowId: window.windowId) {
+        window.bindAsFloatingWindow(to: workspace)
+        return
+    }
     switch prevParentKind {
         case .floatingWindowsContainer:
             window.bindAsFloatingWindow(to: workspace)
