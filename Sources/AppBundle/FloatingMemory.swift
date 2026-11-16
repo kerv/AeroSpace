@@ -12,9 +12,11 @@ final class FloatingMemory {
     private struct Storage: Codable {
         var legacyWindowIds: [UInt32]
         var identities: [Identity]
+        var floatingApps: [String]?
     }
     private var legacyWindowIds: Set<UInt32> = []
     private(set) var identities: [Identity] = []
+    private var floatingApps: Set<String> = []
     let storageURL: URL
 
     private static var defaultURL: URL {
@@ -28,6 +30,9 @@ final class FloatingMemory {
         if let storage = try? JSONDecoder().decode(Storage.self, from: data) {
             legacyWindowIds = Set(storage.legacyWindowIds)
             identities = storage.identities
+            // Older versions stored one choice per window. Promote those choices so
+            // newly opened windows from those apps inherit the same floating mode.
+            floatingApps = Set(storage.floatingApps ?? storage.identities.map(\.appId))
         } else if let legacy = try? JSONDecoder().decode([UInt32].self, from: data) {
             legacyWindowIds = Set(legacy)
         }
@@ -45,6 +50,7 @@ final class FloatingMemory {
             return
         }
         legacyWindowIds.remove(window.windowId)
+        floatingApps.insert(appId)
         let identity = Identity(appId: appId, title: window.placementIdentityTitle, windowId: window.windowId)
         if let index = identities.firstIndex(where: { $0.windowId == window.windowId && $0.appId == appId }) {
             identities[index] = identity
@@ -54,8 +60,8 @@ final class FloatingMemory {
         save()
     }
 
-    /// Prefer the live ID; after an app relaunch use an unambiguous title or single-window app.
-    @MainActor func restore(_ window: Window, appWindowCount: Int) -> Bool {
+    /// Restore existing floated windows and apply an app's preference to newly opened ones.
+    @MainActor func restore(_ window: Window, appWindowCount _: Int) -> Bool {
         if legacyWindowIds.contains(window.windowId) {
             remember(window)
             return true
@@ -63,15 +69,12 @@ final class FloatingMemory {
         guard let appId = window.app.rawAppBundleId else { return false }
         let candidates = identities.indices.filter { identities[$0].appId == appId }
         let exactId = candidates.first { identities[$0].windowId == window.windowId }
-        let matchingTitle = candidates.filter { !window.placementIdentityTitle.isEmpty && identities[$0].title == window.placementIdentityTitle }
-        let exactTitle = matchingTitle.count == 1 ? matchingTitle.first : nil
-        let uniqueApp = appWindowCount == 1 && candidates.count == 1 ? candidates.first : nil
-        guard let index = exactId ?? exactTitle ?? uniqueApp else { return false }
-        // A record already attached to another live window must never be stolen by a new one.
-        if let previousId = identities[index].windowId, previousId != window.windowId,
-           Window.get(byId: previousId) != nil { return false }
+        if exactId == nil, floatingApps.contains(appId) {
+            remember(window)
+            return true
+        }
+        guard let index = exactId else { return false }
         identities[index].windowId = window.windowId
-        // Keep the stored title stable when an app's dynamic title changed.
         save()
         return true
     }
@@ -80,6 +83,7 @@ final class FloatingMemory {
     @MainActor func forget(_ window: Window) {
         legacyWindowIds.remove(window.windowId)
         if let appId = window.app.rawAppBundleId {
+            floatingApps.remove(appId)
             identities.removeAll { $0.appId == appId && $0.windowId == window.windowId }
         }
         save()
@@ -88,9 +92,7 @@ final class FloatingMemory {
     /// Losing a window (including temporarily on screen lock) does not erase its preference.
     func forgetLiveId(windowId: UInt32) {
         legacyWindowIds.remove(windowId)
-        for index in identities.indices where identities[index].windowId == windowId {
-            identities[index].windowId = nil
-        }
+        identities.removeAll { $0.windowId == windowId }
         save()
     }
 
@@ -106,7 +108,7 @@ final class FloatingMemory {
     }
 
     private func save() {
-        let storage = Storage(legacyWindowIds: legacyWindowIds.sorted(), identities: identities)
+        let storage = Storage(legacyWindowIds: legacyWindowIds.sorted(), identities: identities, floatingApps: floatingApps.sorted())
         guard let data = try? JSONEncoder().encode(storage) else { return }
         try? FileManager.default.createDirectory(at: storageURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: storageURL, options: .atomic)

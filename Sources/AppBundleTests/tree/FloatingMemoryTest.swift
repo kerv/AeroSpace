@@ -25,7 +25,7 @@ import XCTest
         XCTAssertFalse(FloatingMemory(storageURL: url).restore(reopened, appWindowCount: 1))
     }
 
-    func testAmbiguousAppWindowsAreNotGuessed() {
+    func testNewWindowsOfFloatingAppInheritPreferenceRegardlessOfTitle() {
         let store = FloatingMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
         let workspace = focus.workspace
         let first = TestWindow.new(id: 311, parent: workspace.floatingWindowsContainer)
@@ -38,9 +38,20 @@ import XCTest
         store.forgetLiveId(windowId: second.windowId)
         let unknown = TestWindow.new(id: 313, parent: workspace.rootTilingContainer)
         unknown.placementIdentityTitle = "Different"
-        XCTAssertFalse(store.restore(unknown, appWindowCount: 2))
-        unknown.placementIdentityTitle = "First"
         XCTAssertTrue(store.restore(unknown, appWindowCount: 2))
+    }
+
+    func testToggleOffChangesDefaultForNewWindowsButKeepsExistingFloatingWindows() {
+        let store = FloatingMemory(storageURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        let workspace = focus.workspace
+        let first = TestWindow.new(id: 314, parent: workspace.floatingWindowsContainer)
+        let second = TestWindow.new(id: 315, parent: workspace.floatingWindowsContainer)
+        store.remember(first)
+        store.remember(second)
+        store.forget(first)
+        let newlyOpened = TestWindow.new(id: 316, parent: workspace.rootTilingContainer)
+        XCTAssertFalse(store.restore(newlyOpened, appWindowCount: 2))
+        XCTAssertTrue(store.restore(second, appWindowCount: 2))
     }
 
     func testLegacyWindowIdIsUpgradedWithoutLosingPreference() throws {
@@ -55,6 +66,16 @@ import XCTest
         let replacement = TestWindow.new(id: 322, parent: focus.workspace.rootTilingContainer)
         replacement.placementIdentityTitle = "Existing"
         XCTAssertTrue(FloatingMemory(storageURL: url).restore(replacement, appWindowCount: 1))
+    }
+
+    func testPreviousPerWindowRecordsBecomeAppDefault() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let old = #"{"legacyWindowIds":[],"identities":[{"appId":"bobko.AeroSpace.test-app","title":"Old window","windowId":321}]}"#
+        try Data(old.utf8).write(to: url)
+        let newWindow = TestWindow.new(id: 323, parent: focus.workspace.rootTilingContainer)
+        newWindow.placementIdentityTitle = "A different window"
+        XCTAssertTrue(FloatingMemory(storageURL: url).restore(newWindow, appWindowCount: 3))
     }
 
     func testNativeFullscreenExitKeepsRememberedWindowFloating() async throws {
@@ -83,5 +104,23 @@ import XCTest
         XCTAssertFalse(reopened.isFloating)
         applyRuntimePlacementDefaults(reopened)
         XCTAssertFalse(reopened.isFloating)
+    }
+
+    func testNewAppWindowFloatsAndToggleChangesFutureDefault() async {
+        let workspace = focus.workspace
+        let first = TestWindow.new(id: 351, parent: workspace.floatingWindowsContainer)
+        first.placementIdentityTitle = "First Finder-like window"
+        FloatingMemory.shared.remember(first)
+        let newWindow = TestWindow.new(id: 352, parent: workspace.rootTilingContainer)
+        newWindow.placementIdentityTitle = "A different window"
+        applyRuntimePlacementDefaults(newWindow)
+        XCTAssertTrue(newWindow.isFloating)
+        XCTAssertTrue(newWindow.focusWindow())
+        let result = await parseCommand("layout floating tiling").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(result.exitCode.rawValue, 0)
+        let laterWindow = TestWindow.new(id: 353, parent: workspace.rootTilingContainer)
+        applyRuntimePlacementDefaults(laterWindow)
+        XCTAssertFalse(laterWindow.isFloating)
+        XCTAssertTrue(first.isFloating)
     }
 }

@@ -50,7 +50,7 @@ Review any warnings before reloading. Zone definitions and window arrangements c
 
 ## Placement and floating windows
 
-Zone layout snapshots and window placement memories are saved under `~/Library/Application Support/AeroSpace/`. An explicit floating choice is remembered across AeroSpace and app restarts using the window ID while available, then app and window identity. Floating positions and sizes are remembered by app, window title, and display profile when the floating window is manipulated or returned to tiling. Matching avoids guessing when several saved windows are indistinguishable; in that case a reopened window may need to be floated again. Use the floating toggle to deliberately return a window to tiling.
+Zone layout snapshots and window placement memories are saved under `~/Library/Application Support/AeroSpace/`. Floating a window sets its app's default to floating, so newly opened windows from that app float too, including after AeroSpace or the app restarts. Toggling a window back to tiling changes the app's default for future windows; other windows that are already open retain their own layouts. Floating positions and sizes are also remembered by app, window title, and display profile when a floating window is manipulated or returned to tiling.
 
 These memories are local to the Mac and are not stored in the TOML or the repository. Keep backups if the arrangements are important. A freshly rebuilt, ad-hoc-signed app can require Accessibility permission to be re-enabled in macOS System Settings.
 
